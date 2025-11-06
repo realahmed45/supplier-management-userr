@@ -219,11 +219,11 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
         <div className="bg-yellow-50 border-0 sm:border-4 sm:border-yellow-400 sm:rounded-xl shadow-xl p-3 sm:p-6 mb-2 sm:mb-4 -mx-2 sm:mx-0">
           <div className="flex items-start gap-2 sm:gap-3">
             <AlertCircle className="text-yellow-600 flex-shrink-0" size={24} />
-            <div>
+            <div className="flex-1">
               <h2 className="text-lg sm:text-2xl font-bold text-yellow-900 mb-2 sm:mb-3">
                 ⚠️ IMPORTANT: Read Before Proceeding
               </h2>
-              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4 mb-2 sm:mb-3">
+              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4 mb-2 sm:mb-3 -mx-3 sm:mx-0">
                 <p className="text-base sm:text-lg font-bold text-yellow-900 mb-1 sm:mb-2">
                   This portal is ONLY for suppliers who can provide the specific
                   products listed below.
@@ -233,11 +233,11 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
                   with this form.
                 </p>
               </div>
-              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4">
-                <h3 className="text-sm sm:text-base font-bold text-gray-800 mb-1 sm:mb-2">
+              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4 -mx-3 sm:mx-0">
+                <h3 className="text-base sm:text-base font-bold text-gray-800 mb-1 sm:mb-2">
                   ✅ What You Must Do:
                 </h3>
-                <ul className="list-none space-y-1 text-gray-700 text-xs sm:text-sm">
+                <ul className="list-none space-y-1 text-gray-700 text-sm sm:text-sm">
                   <li className="flex items-start gap-2">
                     <span className="text-green-600 font-bold">1.</span>
                     <span>Select the category of products you can supply</span>
