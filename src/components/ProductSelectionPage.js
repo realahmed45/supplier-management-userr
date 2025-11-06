@@ -530,7 +530,7 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
                             </label>
                             <input
                               type="text"
-                              placeholder="e.g., 2-4 weeks"
+                              placeholder="e.g., 2-4 days"
                               value={productDetails[product.id]?.leadTime || ""}
                               onChange={(e) =>
                                 handleProductDetailChange(
