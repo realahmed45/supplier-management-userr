@@ -223,47 +223,50 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
               <h2 className="text-lg sm:text-2xl font-bold text-yellow-900 mb-2 sm:mb-3">
                 ⚠️ IMPORTANT: Read Before Proceeding
               </h2>
-              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4 mb-2 sm:mb-3 -mx-3 sm:mx-0">
-                <p className="text-base sm:text-lg font-bold text-yellow-900 mb-1 sm:mb-2">
-                  This portal is ONLY for suppliers who can provide the specific
-                  products listed below.
-                </p>
-                <p className="text-sm sm:text-base text-yellow-800 mb-2 sm:mb-3">
-                  If you DO NOT supply these products, please DO NOT continue
-                  with this form.
-                </p>
-              </div>
-              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4 -mx-3 sm:mx-0">
-                <h3 className="text-base sm:text-base font-bold text-gray-800 mb-1 sm:mb-2">
-                  ✅ What You Must Do:
-                </h3>
-                <ul className="list-none space-y-1 text-gray-700 text-sm sm:text-sm">
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-600 font-bold">1.</span>
-                    <span>Select the category of products you can supply</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-600 font-bold">2.</span>
-                    <span>Choose the specific products from our catalog</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-600 font-bold">3.</span>
-                    <span>
-                      Provide complete details for each product (brand, size,
-                      price, quantity)
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-600 font-bold">4.</span>
-                    <span>
-                      Only AFTER adding products can you continue to the next
-                      step
-                    </span>
-                  </li>
-                </ul>
-              </div>
             </div>
           </div>
+        </div>
+
+        {/* First White Section - Edge to Edge on Mobile */}
+        <div className="bg-white p-3 sm:p-4 mb-2 sm:mb-3 -mx-2 sm:mx-0 sm:rounded-lg">
+          <p className="text-base sm:text-lg font-bold text-yellow-900 mb-1 sm:mb-2">
+            This portal is ONLY for suppliers who can provide the specific
+            products listed below.
+          </p>
+          <p className="text-sm sm:text-base text-yellow-800">
+            If you DO NOT supply these products, please DO NOT continue with
+            this form.
+          </p>
+        </div>
+
+        {/* Second White Section - Edge to Edge on Mobile */}
+        <div className="bg-white p-3 sm:p-4 mb-4 -mx-2 sm:mx-0 sm:rounded-lg">
+          <h3 className="text-base sm:text-base font-bold text-gray-800 mb-2">
+            ✅ What You Must Do:
+          </h3>
+          <ul className="list-none space-y-2 text-gray-700 text-sm sm:text-sm">
+            <li className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">1.</span>
+              <span>Select the category of products you can supply</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">2.</span>
+              <span>Choose the specific products from our catalog</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">3.</span>
+              <span>
+                Provide complete details for each product (brand, size, price,
+                quantity)
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">4.</span>
+              <span>
+                Only AFTER adding products can you continue to the next step
+              </span>
+            </li>
+          </ul>
         </div>
 
         {/* PRODUCT SELECTION */}
