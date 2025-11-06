@@ -474,44 +474,50 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
                             />
                           </div>
 
-                          <div>
+                          <div className="sm:col-span-2">
                             <label className="block text-sm font-bold text-gray-700 mb-1">
                               Price & Unit *
                             </label>
-                            <div className="flex gap-2">
-                              <input
-                                type="number"
-                                placeholder="Price"
-                                value={productDetails[product.id]?.price || ""}
-                                onChange={(e) =>
-                                  handleProductDetailChange(
-                                    product.id,
-                                    "price",
-                                    e.target.value
-                                  )
-                                }
-                                className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                                required
-                              />
-                              <select
-                                value={
-                                  productDetails[product.id]?.unit || "piece"
-                                }
-                                onChange={(e) =>
-                                  handleProductDetailChange(
-                                    product.id,
-                                    "unit",
-                                    e.target.value
-                                  )
-                                }
-                                className="px-2 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                              >
-                                <option value="piece">Piece</option>
-                                <option value="kg">Kg</option>
-                                <option value="liter">Liter</option>
-                                <option value="box">Box</option>
-                                <option value="pack">Pack</option>
-                              </select>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <div className="flex-1">
+                                <input
+                                  type="number"
+                                  placeholder="Enter price"
+                                  value={
+                                    productDetails[product.id]?.price || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleProductDetailChange(
+                                      product.id,
+                                      "price",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                                  required
+                                />
+                              </div>
+                              <div className="sm:w-32">
+                                <select
+                                  value={
+                                    productDetails[product.id]?.unit || "piece"
+                                  }
+                                  onChange={(e) =>
+                                    handleProductDetailChange(
+                                      product.id,
+                                      "unit",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                                >
+                                  <option value="piece">Piece</option>
+                                  <option value="kg">Kg</option>
+                                  <option value="liter">Liter</option>
+                                  <option value="box">Box</option>
+                                  <option value="pack">Pack</option>
+                                </select>
+                              </div>
                             </div>
                           </div>
 
