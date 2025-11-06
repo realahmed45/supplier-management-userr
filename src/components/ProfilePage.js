@@ -68,16 +68,12 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
   const validate = () => {
     const newErrors = {};
 
+    // Only validate required fields: company name, contact person, and phone
     if (!supplierData.companyName?.trim()) {
       newErrors.companyName = "Company name is required";
     }
     if (!supplierData.contactPerson?.trim()) {
       newErrors.contactPerson = "Contact person is required";
-    }
-    if (!supplierData.email?.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^\S+@\S+\.\S+$/.test(supplierData.email)) {
-      newErrors.email = "Please enter a valid email address";
     }
     if (!supplierData.phone?.trim()) {
       newErrors.phone = "Phone number is required";
@@ -234,70 +230,34 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
           </div>
         </div>
 
+        {/* Fixed Support Box - Smaller */}
+        <div className="fixed top-4 right-2 bg-white rounded-lg shadow-lg p-3 max-w-xs border border-purple-200 z-50">
+          <div className="flex items-center gap-2">
+            <div className="bg-purple-100 p-1 rounded-full">
+              <MessageCircle className="text-purple-600" size={16} />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-gray-800 text-sm">Need Help?</h3>
+              <button className="w-full flex items-center gap-1 px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition-colors mt-1">
+                <Phone size={12} />
+                +620864322626
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Form */}
         <div className="bg-white rounded-2xl shadow-lg p-8">
           <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Profile Picture */}
-            <div className="text-center">
-              <div className="relative inline-block">
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center mx-auto mb-4 overflow-hidden border-4 border-white shadow-lg">
-                  {previewImage || supplierData.profilePicture ? (
-                    <img
-                      src={previewImage || supplierData.profilePicture}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Camera className="text-white" size={40} />
-                  )}
-                </div>
-                <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 transition-colors">
-                  <Upload size={16} />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Upload your company logo or profile picture
-              </p>
-            </div>
-
-            {/* Fixed Support Box */}
-            <div className="fixed top-10 right-2 bg-white rounded-2xl shadow-2xl p-6 max-w-sm border-2 border-purple-200 z-50">
-              <div className="flex items-start gap-3">
-                <div className="bg-purple-100 p-2 rounded-full">
-                  <MessageCircle className="text-purple-600" size={20} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-extrabold text-gray-800 mb-2">
-                    Need Help?
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Reach out to us if you need help
-                  </p>
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      className="w-full flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
-                    >
-                      <Phone size={16} />
-                      Call +620864322626
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Company Information */}
-            <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+            {/* Required Information Section */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-500 rounded-2xl p-6 mb-8">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Building2 className="text-blue-600" size={24} />
-                Company Information
+                Required Information
               </h2>
+              <p className="text-gray-600 mb-6">
+                Fill these required fields to continue
+              </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -356,36 +316,6 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Email Address *
-                  </label>
-                  <div className="relative">
-                    <Mail
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
-                    <input
-                      type="email"
-                      name="email"
-                      value={supplierData.email || ""}
-                      onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                        errors.email
-                          ? "border-red-500 bg-red-50"
-                          : "border-gray-200"
-                      }`}
-                      placeholder="Enter your email address"
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle size={16} />
-                      {errors.email}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Phone Number *
                   </label>
                   <div className="relative">
@@ -412,6 +342,68 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                       {errors.phone}
                     </p>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Optional Information Section */}
+            <div className="bg-gray-50 border-2 border-gray-300 rounded-2xl p-6 mb-8">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Mail className="text-gray-600" size={24} />
+                Optional Information
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Complete your profile (optional but recommended)
+              </p>
+
+              {/* Profile Picture */}
+              <div className="text-center mb-6">
+                <div className="relative inline-block">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center mx-auto mb-4 overflow-hidden border-4 border-white shadow-lg">
+                    {previewImage || supplierData.profilePicture ? (
+                      <img
+                        src={previewImage || supplierData.profilePicture}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Camera className="text-white" size={24} />
+                    )}
+                  </div>
+                  <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 transition-colors">
+                    <Upload size={12} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <p className="text-sm text-gray-500">
+                  Upload company logo or profile picture
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      size={20}
+                    />
+                    <input
+                      type="email"
+                      name="email"
+                      value={supplierData.email || ""}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      placeholder="Enter your email address"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -452,17 +444,15 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                     />
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Address Information */}
-            <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <MapPin className="text-green-600" size={24} />
-                Address Information
-              </h2>
+                {/* Address Information */}
+                <div className="md:col-span-2">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <MapPin className="text-green-600" size={20} />
+                    Address Information
+                  </h3>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Street Address
