@@ -536,10 +536,9 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
 
                           <div className="sm:col-span-2">
                             <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Product Description (Optional)
+                              Addional notes if needed ( optional )
                             </label>
                             <textarea
-                              placeholder="Additional details about the product..."
                               value={
                                 productDetails[product.id]?.description || ""
                               }
