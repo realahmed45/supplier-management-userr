@@ -526,7 +526,7 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
 
                           <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Lead Time (Delivery Time)
+                              ( Delivery time ) days
                             </label>
                             <input
                               type="text"
