@@ -134,6 +134,13 @@ const Dashboard = ({ user, onLogout }) => {
 
     try {
       const token = localStorage.getItem("authToken");
+      console.log("Token from localStorage:", token ? "Present" : "Missing");
+
+      if (!token) {
+        setError("No authentication token found. Please login again.");
+        return;
+      }
+
       const formDataObj = new FormData();
 
       Object.keys(formData).forEach((key) => {
@@ -143,6 +150,9 @@ const Dashboard = ({ user, onLogout }) => {
           formDataObj.append(key, formData[key]);
         }
       });
+
+      console.log("Making request to:", `${API_BASE_URL}/suppliers/profile`);
+      console.log("With token:", token.substring(0, 10) + "...");
 
       const response = await axios.patch(
         `${API_BASE_URL}/suppliers/profile`,
@@ -162,7 +172,17 @@ const Dashboard = ({ user, onLogout }) => {
       }
     } catch (error) {
       console.error("Error updating profile:", error);
-      setError(error.response?.data?.message || "Failed to update profile");
+      console.error("Error response:", error.response?.data);
+
+      if (error.response?.status === 401) {
+        setError("Session expired. Please login again.");
+        // Optionally redirect to login
+        setTimeout(() => {
+          handleLogout();
+        }, 2000);
+      } else {
+        setError(error.response?.data?.message || "Failed to update profile");
+      }
     } finally {
       setIsSaving(false);
     }
