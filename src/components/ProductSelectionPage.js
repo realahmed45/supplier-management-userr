@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Package,
@@ -10,7 +10,12 @@ import {
   Phone,
   MessageCircle,
   ShoppingCart,
+  ArrowLeft,
+  LogOut,
 } from "lucide-react";
+import axios from "axios";
+
+const API_BASE_URL = "https://supplier-mangement-backend.onrender.com/api";
 
 // Product catalog with categories and subcategories
 const PRODUCT_CATALOG = {
@@ -82,13 +87,48 @@ const PRODUCT_CATALOG = {
   },
 };
 
-const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
+const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
   const navigate = useNavigate();
 
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [productDetails, setProductDetails] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Load existing supplier data if user has it
+  useEffect(() => {
+    if (user?.hasSupplierData) {
+      loadExistingData();
+    }
+  }, [user]);
+
+  const loadExistingData = async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await axios.get(
+        `${API_BASE_URL}/suppliers/my-supplier`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.data.success && response.data.supplier?.products) {
+        updateSupplierData({
+          products: response.data.supplier.products,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading existing data:", error);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    navigate("/login");
+  };
 
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
@@ -136,7 +176,7 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
     });
   };
 
-  const addSelectedProducts = () => {
+  const addSelectedProducts = async () => {
     // Validate that all required fields are filled
     for (const product of selectedProducts) {
       const details = productDetails[product.id];
@@ -171,19 +211,103 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
       };
     });
 
-    updateSupplierData({
-      products: [...(supplierData.products || []), ...productsToAdd],
-    });
+    // If user has existing supplier data, update it directly
+    if (user?.hasSupplierData) {
+      setIsLoading(true);
+      try {
+        const token = localStorage.getItem("authToken");
+        const allProducts = [
+          ...(supplierData.products || []),
+          ...productsToAdd,
+        ];
 
-    setSelectedProducts([]);
-    setProductDetails({});
-    alert(`${productsToAdd.length} product(s) added successfully!`);
+        const response = await axios.patch(
+          `${API_BASE_URL}/suppliers/${user.supplierId}/business`,
+          {
+            products: allProducts,
+            businessType: [],
+            yearsInBusiness: 0,
+            warehouses: [],
+            shippingMethods: [],
+            deliveryAreas: [],
+            paymentTerms: [],
+            preferredCurrency: "IDR",
+            documents: [],
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.data.success) {
+          updateSupplierData({ products: allProducts });
+          setSuccess(`${productsToAdd.length} product(s) added successfully!`);
+          setSelectedProducts([]);
+          setProductDetails({});
+          setTimeout(() => setSuccess(""), 3000);
+        }
+      } catch (error) {
+        console.error("Error adding products:", error);
+        setError("Failed to add products. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // For new users, just update local state
+      updateSupplierData({
+        products: [...(supplierData.products || []), ...productsToAdd],
+      });
+
+      setSelectedProducts([]);
+      setProductDetails({});
+      setSuccess(`${productsToAdd.length} product(s) added successfully!`);
+      setTimeout(() => setSuccess(""), 3000);
+    }
   };
 
-  const removeProduct = (index) => {
+  const removeProduct = async (index) => {
     const updatedProducts = [...(supplierData.products || [])];
     updatedProducts.splice(index, 1);
-    updateSupplierData({ products: updatedProducts });
+
+    // If user has existing supplier data, update it directly
+    if (user?.hasSupplierData) {
+      setIsLoading(true);
+      try {
+        const token = localStorage.getItem("authToken");
+
+        const response = await axios.patch(
+          `${API_BASE_URL}/suppliers/${user.supplierId}/business`,
+          {
+            products: updatedProducts,
+            businessType: [],
+            yearsInBusiness: 0,
+            warehouses: [],
+            shippingMethods: [],
+            deliveryAreas: [],
+            paymentTerms: [],
+            preferredCurrency: "IDR",
+            documents: [],
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.data.success) {
+          updateSupplierData({ products: updatedProducts });
+          setSuccess("Product removed successfully!");
+          setTimeout(() => setSuccess(""), 3000);
+        }
+      } catch (error) {
+        console.error("Error removing product:", error);
+        setError("Failed to remove product. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // For new users, just update local state
+      updateSupplierData({ products: updatedProducts });
+    }
   };
 
   const handleContinue = () => {
@@ -191,88 +315,149 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
       alert("Please add at least one product before continuing.");
       return;
     }
-    navigate("/profile");
+
+    // If user already has supplier data, go to dashboard
+    if (user?.hasSupplierData) {
+      navigate("/dashboard");
+    } else {
+      navigate("/profile");
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 px-2 sm:px-4 lg:px-6 py-4 pb-20">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
+        {/* Header with logout */}
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4">
-          <div className="text-center">
-            <div className="flex justify-center items-center gap-3 mb-3">
-              <ShoppingCart className="text-purple-600" size={32} />
-              <Package className="text-green-600" size={32} />
+          <div className="flex justify-between items-center">
+            <div className="text-center flex-1">
+              <div className="flex justify-center items-center gap-3 mb-3">
+                <ShoppingCart className="text-purple-600" size={32} />
+                <Package className="text-green-600" size={32} />
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
+                {user?.hasSupplierData
+                  ? "Manage Your Products"
+                  : "Welcome to Our Supplier Portal"}
+              </h1>
+              <p className="text-lg sm:text-xl text-gray-700 font-semibold">
+                {user?.hasSupplierData
+                  ? "Add or remove products from your catalog"
+                  : "🎯 Step 1 of 2: Select Products You Supply"}
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
-              Welcome to Our Supplier Portal
-            </h1>
-            <p className="text-lg sm:text-xl text-gray-700 font-semibold">
-              🎯 Step 1 of 2: Select Products You Supply
+
+            <div className="flex items-center gap-4">
+              {user?.hasSupplierData && (
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ArrowLeft size={20} />
+                  Dashboard
+                </button>
+              )}
+
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <LogOut size={20} />
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Success/Error Messages */}
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+            <p className="text-green-600 flex items-center gap-2">
+              <CheckCircle size={16} />
+              {success}
             </p>
           </div>
-        </div>
+        )}
 
-        {/* IMPORTANT NOTICE */}
-        <div className="bg-yellow-50 border-0 sm:border-4 sm:border-yellow-400 sm:rounded-xl shadow-xl p-3 sm:p-6 mb-2 sm:mb-4 -mx-2 sm:mx-0">
-          <div className="flex items-start gap-2 sm:gap-3">
-            <AlertCircle className="text-yellow-600 flex-shrink-0" size={24} />
-            <div className="flex-1">
-              <h2 className="text-lg sm:text-2xl font-bold text-yellow-900 mb-2 sm:mb-3">
-                ⚠️ IMPORTANT: Read Before Proceeding
-              </h2>
-            </div>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+            <p className="text-red-600 flex items-center gap-2">
+              <AlertCircle size={16} />
+              {error}
+            </p>
           </div>
-        </div>
+        )}
 
-        {/* First White Section - Edge to Edge on Mobile */}
-        <div className="bg-white p-3 sm:p-4 mb-2 sm:mb-3 -mx-2 sm:mx-0 sm:rounded-lg">
-          <p className="text-lg sm:text-lg font-bold text-yellow-900 mb-2 sm:mb-2">
-            This portal is ONLY for suppliers who can provide the specific
-            products listed below.
-          </p>
-          <p className="text-base sm:text-base text-yellow-800">
-            If you DO NOT supply these products, please DO NOT continue with
-            this form.
-          </p>
-        </div>
+        {/* Show important notice only for new users */}
+        {!user?.hasSupplierData && (
+          <>
+            {/* IMPORTANT NOTICE */}
+            <div className="bg-yellow-50 border-0 sm:border-4 sm:border-yellow-400 sm:rounded-xl shadow-xl p-3 sm:p-6 mb-2 sm:mb-4 -mx-2 sm:mx-0">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <AlertCircle
+                  className="text-yellow-600 flex-shrink-0"
+                  size={24}
+                />
+                <div className="flex-1">
+                  <h2 className="text-lg sm:text-2xl font-bold text-yellow-900 mb-2 sm:mb-3">
+                    ⚠️ IMPORTANT: Read Before Proceeding
+                  </h2>
+                </div>
+              </div>
+            </div>
 
-        {/* Second White Section - Edge to Edge on Mobile */}
-        <div className="bg-white p-3 sm:p-4 mb-4 -mx-2 sm:mx-0 sm:rounded-lg">
-          <h3 className="text-lg sm:text-lg font-bold text-gray-800 mb-3">
-            ✅ What You Must Do:
-          </h3>
-          <ul className="list-none space-y-2 text-gray-700 text-base sm:text-base">
-            <li className="flex items-start gap-2">
-              <span className="text-green-600 font-bold">1.</span>
-              <span>Select the category of products you can supply</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-600 font-bold">2.</span>
-              <span>Choose the specific products from our catalog</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-600 font-bold">3.</span>
-              <span>
-                Provide complete details for each product (brand, size, price,
-                quantity)
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-600 font-bold">4.</span>
-              <span>
-                Only AFTER adding products can you continue to the next step
-              </span>
-            </li>
-          </ul>
-        </div>
+            {/* First White Section - Edge to Edge on Mobile */}
+            <div className="bg-white p-3 sm:p-4 mb-2 sm:mb-3 -mx-2 sm:mx-0 sm:rounded-lg">
+              <p className="text-lg sm:text-lg font-bold text-yellow-900 mb-2 sm:mb-2">
+                This portal is ONLY for suppliers who can provide the specific
+                products listed below.
+              </p>
+              <p className="text-base sm:text-base text-yellow-800">
+                If you DO NOT supply these products, please DO NOT continue with
+                this form.
+              </p>
+            </div>
+
+            {/* Second White Section - Edge to Edge on Mobile */}
+            <div className="bg-white p-3 sm:p-4 mb-4 -mx-2 sm:mx-0 sm:rounded-lg">
+              <h3 className="text-lg sm:text-lg font-bold text-gray-800 mb-3">
+                ✅ What You Must Do:
+              </h3>
+              <ul className="list-none space-y-2 text-gray-700 text-base sm:text-base">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold">1.</span>
+                  <span>Select the category of products you can supply</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold">2.</span>
+                  <span>Choose the specific products from our catalog</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold">3.</span>
+                  <span>
+                    Provide complete details for each product (brand, size,
+                    price, quantity)
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold">4.</span>
+                  <span>
+                    Only AFTER adding products can you continue to the next step
+                  </span>
+                </li>
+              </ul>
+            </div>
+          </>
+        )}
 
         {/* PRODUCT SELECTION */}
         <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl shadow-xl p-4 sm:p-6 border-4 border-green-500 mb-4">
           <div className="mb-4">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
               <Package className="text-green-600" size={28} />
-              Select Your Products
+              {user?.hasSupplierData
+                ? "Add More Products"
+                : "Select Your Products"}
             </h2>
             <p className="text-base text-gray-700 font-semibold">
               📋 Choose from our catalog below:
@@ -497,7 +682,7 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
 
                           <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">
-                              ( Delivery time ) days
+                              Delivery time (days)
                             </label>
                             <input
                               type="text"
@@ -516,7 +701,7 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
 
                           <div className="sm:col-span-2">
                             <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Addional notes if needed ( optional )
+                              Additional notes if needed (optional)
                             </label>
                             <textarea
                               value={
@@ -544,11 +729,17 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
                 <button
                   type="button"
                   onClick={addSelectedProducts}
-                  className="mt-4 w-full px-6 py-3 bg-green-600 text-white text-lg font-bold rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg"
+                  disabled={isLoading}
+                  className="mt-4 w-full px-6 py-3 bg-green-600 text-white text-lg font-bold rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
                 >
-                  <Plus size={20} />
-                  Add Selected Products ({selectedProducts.length}) to
-                  Application
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                  ) : (
+                    <Plus size={20} />
+                  )}
+                  {isLoading
+                    ? "Adding..."
+                    : `Add Selected Products (${selectedProducts.length}) to Application`}
                 </button>
               )}
             </div>
@@ -604,7 +795,8 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
                           <button
                             type="button"
                             onClick={() => removeProduct(index)}
-                            className="text-red-600 hover:text-red-800 font-medium flex items-center gap-1 text-sm"
+                            disabled={isLoading}
+                            className="text-red-600 hover:text-red-800 font-medium flex items-center gap-1 text-sm disabled:opacity-50"
                           >
                             <X size={16} />
                             Remove
@@ -627,7 +819,9 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
                 🎉 Great! You've added {supplierData.products.length} product(s)
               </h3>
               <p className="text-base text-gray-600">
-                Click below to continue with your company information
+                {user?.hasSupplierData
+                  ? "Products updated successfully. Return to your dashboard or add more products."
+                  : "Click below to continue with your company information"}
               </p>
             </div>
             <div className="flex justify-center">
@@ -635,7 +829,9 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
                 onClick={handleContinue}
                 className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-lg font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center gap-2 shadow-lg"
               >
-                Continue to Company Information
+                {user?.hasSupplierData
+                  ? "Back to Dashboard"
+                  : "Continue to Company Information"}
                 <ArrowRight size={20} />
               </button>
             </div>

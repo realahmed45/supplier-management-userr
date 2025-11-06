@@ -15,14 +15,35 @@ import {
   ArrowLeft,
   CheckCircle,
   Package,
+  LogOut,
 } from "lucide-react";
 import axios from "axios";
 
-const ProfilePage = ({ supplierData, updateSupplierData }) => {
+const API_BASE_URL = "https://supplier-mangement-backend.onrender.com/api";
+
+const ProfilePage = ({ supplierData, updateSupplierData, user }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const navigate = useNavigate();
+
+  // Form data state
+  const [formData, setFormData] = useState({
+    companyName: "",
+    contactPerson: "",
+    email: "",
+    phone: "",
+    website: "",
+    taxId: "",
+    address: {
+      street: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "Indonesia",
+    },
+    profilePicture: "",
+  });
 
   // Redirect if no products selected
   useEffect(() => {
@@ -32,19 +53,50 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
     }
   }, [supplierData.products, navigate]);
 
+  // Load user data if available
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        companyName: user.companyName || "",
+        contactPerson: user.contactPerson || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        website: user.website || "",
+        taxId: user.taxId || "",
+        address: user.address || {
+          street: "",
+          city: "",
+          state: "",
+          postalCode: "",
+          country: "Indonesia",
+        },
+        profilePicture: user.profilePicture || "",
+      });
+    }
+  }, [user]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    navigate("/login");
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
     if (name.includes("address.")) {
       const addressField = name.split(".")[1];
-      updateSupplierData({
+      setFormData((prev) => ({
+        ...prev,
         address: {
-          ...supplierData.address,
+          ...prev.address,
           [addressField]: value,
         },
-      });
+      }));
     } else {
-      updateSupplierData({ [name]: value });
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
     }
 
     if (errors[name]) {
@@ -58,7 +110,10 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result;
-        updateSupplierData({ profilePicture: base64String });
+        setFormData((prev) => ({
+          ...prev,
+          profilePicture: base64String,
+        }));
         setPreviewImage(base64String);
       };
       reader.readAsDataURL(file);
@@ -69,18 +124,37 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
     const newErrors = {};
 
     // Only validate required fields: company name, contact person, and phone
-    if (!supplierData.companyName?.trim()) {
+    if (!formData.companyName?.trim()) {
       newErrors.companyName = "Company name is required";
     }
-    if (!supplierData.contactPerson?.trim()) {
+    if (!formData.contactPerson?.trim()) {
       newErrors.contactPerson = "Contact person is required";
     }
-    if (!supplierData.phone?.trim()) {
+    if (!formData.phone?.trim()) {
       newErrors.phone = "Phone number is required";
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  // Helper function to convert base64 to blob
+  const base64ToBlob = (base64String) => {
+    try {
+      const [header, data] = base64String.split(",");
+      const mimeType = header.match(/:(.*?);/)[1];
+      const binaryString = window.atob(data);
+      const bytes = new Uint8Array(binaryString.length);
+
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      return new Blob([bytes], { type: mimeType });
+    } catch (error) {
+      console.error("Error converting base64 to blob:", error);
+      return null;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -96,51 +170,46 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
     setIsSubmitting(true);
 
     try {
+      const token = localStorage.getItem("authToken");
+
       // Step 1: Create supplier with profile info
-      const formData = new FormData();
+      const formDataObj = new FormData();
 
-      const profileFields = [
-        "companyName",
-        "contactPerson",
-        "email",
-        "phone",
-        "website",
-        "taxId",
-      ];
-
-      profileFields.forEach((field) => {
-        if (supplierData[field]) {
-          formData.append(field, supplierData[field]);
+      // Add form fields (excluding profilePicture for now)
+      Object.keys(formData).forEach((key) => {
+        if (key === "address") {
+          formDataObj.append(key, JSON.stringify(formData[key]));
+        } else if (key === "profilePicture") {
+          // Handle profile picture separately
+          if (formData[key] && formData[key].startsWith("data:")) {
+            const blob = base64ToBlob(formData[key]);
+            if (blob) {
+              formDataObj.append(key, blob, "profile.jpg");
+            }
+          }
+        } else if (formData[key]) {
+          formDataObj.append(key, formData[key]);
         }
       });
 
-      // Add address
-      formData.append("address", JSON.stringify(supplierData.address || {}));
-
-      // Add profile picture if exists
-      if (supplierData.profilePicture) {
-        const response = await fetch(supplierData.profilePicture);
-        const blob = await response.blob();
-        formData.append("profilePicture", blob, "profile.jpg");
-      }
-
       // Create supplier
       const createResponse = await axios.post(
-        "https://supplier-mangement-backend.onrender.com/api/suppliers",
-        formData,
+        `${API_BASE_URL}/suppliers`,
+        formDataObj,
         {
           headers: {
             "Content-Type": "multipart/form-data",
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      const supplierId = createResponse.data._id;
+      const supplierId = createResponse.data.supplier._id;
       console.log("Supplier created with ID:", supplierId);
 
       // Step 2: Update with products using PATCH
       await axios.patch(
-        `https://supplier-mangement-backend.onrender.com/api/suppliers/${supplierId}/business`,
+        `${API_BASE_URL}/suppliers/${supplierId}/business`,
         {
           products: supplierData.products || [],
           businessType: [],
@@ -155,6 +224,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
         {
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -181,6 +251,26 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="max-w-4xl mx-auto">
+        {/* Header with logout */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Company Information
+              </h1>
+              <p className="text-gray-600">Tell us about your company</p>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <LogOut size={20} />
+              Logout
+            </button>
+          </div>
+        </div>
+
         {/* Progress Indicator */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <div className="flex items-center justify-between">
@@ -216,17 +306,6 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                 Great! Now let's add your company information
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* Header */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-          <div className="text-center">
-            <Building2 className="mx-auto text-blue-600 mb-4" size={48} />
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">
-              Company Information
-            </h1>
-            <p className="text-gray-600">Tell us about your company</p>
           </div>
         </div>
 
@@ -267,7 +346,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                   <input
                     type="text"
                     name="companyName"
-                    value={supplierData.companyName || ""}
+                    value={formData.companyName}
                     onChange={handleChange}
                     className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                       errors.companyName
@@ -296,7 +375,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                     <input
                       type="text"
                       name="contactPerson"
-                      value={supplierData.contactPerson || ""}
+                      value={formData.contactPerson}
                       onChange={handleChange}
                       className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                         errors.contactPerson
@@ -326,9 +405,10 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                     <input
                       type="tel"
                       name="phone"
-                      value={supplierData.phone || ""}
+                      value={formData.phone}
                       onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                      disabled={true} // Phone should be read-only as it's used for authentication
+                      className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-100 ${
                         errors.phone
                           ? "border-red-500 bg-red-50"
                           : "border-gray-200"
@@ -342,6 +422,10 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                       {errors.phone}
                     </p>
                   )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Phone number is linked to your account and cannot be changed
+                    here
+                  </p>
                 </div>
               </div>
             </div>
@@ -360,9 +444,9 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
               <div className="text-center mb-6">
                 <div className="relative inline-block">
                   <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center mx-auto mb-4 overflow-hidden border-4 border-white shadow-lg">
-                    {previewImage || supplierData.profilePicture ? (
+                    {previewImage || formData.profilePicture ? (
                       <img
-                        src={previewImage || supplierData.profilePicture}
+                        src={previewImage || formData.profilePicture}
                         alt="Profile"
                         className="w-full h-full object-cover"
                       />
@@ -398,7 +482,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                     <input
                       type="email"
                       name="email"
-                      value={supplierData.email || ""}
+                      value={formData.email}
                       onChange={handleChange}
                       className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                       placeholder="Enter your email address"
@@ -417,7 +501,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                     />
                     <input
                       name="website"
-                      value={supplierData.website || ""}
+                      value={formData.website}
                       onChange={handleChange}
                       className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                       placeholder="https://yourwebsite.com"
@@ -437,7 +521,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                     <input
                       type="text"
                       name="taxId"
-                      value={supplierData.taxId || ""}
+                      value={formData.taxId}
                       onChange={handleChange}
                       className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                       placeholder="Enter your tax ID"
@@ -460,7 +544,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                   <input
                     type="text"
                     name="address.street"
-                    value={supplierData.address?.street || ""}
+                    value={formData.address.street}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     placeholder="Enter street address"
@@ -474,7 +558,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                   <input
                     type="text"
                     name="address.city"
-                    value={supplierData.address?.city || ""}
+                    value={formData.address.city}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     placeholder="Enter city"
@@ -488,7 +572,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                   <input
                     type="text"
                     name="address.state"
-                    value={supplierData.address?.state || ""}
+                    value={formData.address.state}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     placeholder="Enter state/province"
@@ -502,7 +586,7 @@ const ProfilePage = ({ supplierData, updateSupplierData }) => {
                   <input
                     type="text"
                     name="address.postalCode"
-                    value={supplierData.address?.postalCode || ""}
+                    value={formData.address.postalCode}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     placeholder="Enter postal code"
