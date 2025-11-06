@@ -229,11 +229,11 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
 
         {/* First White Section - Edge to Edge on Mobile */}
         <div className="bg-white p-3 sm:p-4 mb-2 sm:mb-3 -mx-2 sm:mx-0 sm:rounded-lg">
-          <p className="text-base sm:text-lg font-bold text-yellow-900 mb-1 sm:mb-2">
+          <p className="text-lg sm:text-lg font-bold text-yellow-900 mb-2 sm:mb-2">
             This portal is ONLY for suppliers who can provide the specific
             products listed below.
           </p>
-          <p className="text-sm sm:text-base text-yellow-800">
+          <p className="text-base sm:text-base text-yellow-800">
             If you DO NOT supply these products, please DO NOT continue with
             this form.
           </p>
@@ -241,10 +241,10 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
 
         {/* Second White Section - Edge to Edge on Mobile */}
         <div className="bg-white p-3 sm:p-4 mb-4 -mx-2 sm:mx-0 sm:rounded-lg">
-          <h3 className="text-base sm:text-base font-bold text-gray-800 mb-2">
+          <h3 className="text-lg sm:text-lg font-bold text-gray-800 mb-3">
             ✅ What You Must Do:
           </h3>
-          <ul className="list-none space-y-2 text-gray-700 text-sm sm:text-sm">
+          <ul className="list-none space-y-2 text-gray-700 text-base sm:text-base">
             <li className="flex items-start gap-2">
               <span className="text-green-600 font-bold">1.</span>
               <span>Select the category of products you can supply</span>
@@ -374,7 +374,7 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
 
                       {/* Product Details Form */}
                       {selectedProducts.some((p) => p.id === product.id) && (
-                        <div className="ml-8 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 animate-fade-in bg-white p-4 rounded-lg border-2 border-green-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 animate-fade-in bg-white p-3 sm:p-4 border-2 border-green-200 -mx-4 sm:mx-8 sm:rounded-lg">
                           <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">
                               Brand Name *
