@@ -216,28 +216,28 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData }) => {
         </div>
 
         {/* IMPORTANT NOTICE */}
-        <div className="bg-yellow-50 border-4 border-yellow-400 rounded-xl shadow-xl p-4 sm:p-6 mb-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="text-yellow-600 flex-shrink-0" size={32} />
+        <div className="bg-yellow-50 border-0 sm:border-4 sm:border-yellow-400 sm:rounded-xl shadow-xl p-3 sm:p-6 mb-2 sm:mb-4 -mx-2 sm:mx-0">
+          <div className="flex items-start gap-2 sm:gap-3">
+            <AlertCircle className="text-yellow-600 flex-shrink-0" size={24} />
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-yellow-900 mb-3">
+              <h2 className="text-lg sm:text-2xl font-bold text-yellow-900 mb-2 sm:mb-3">
                 ⚠️ IMPORTANT: Read Before Proceeding
               </h2>
-              <div className="bg-white rounded-lg p-4 mb-3">
-                <p className="text-lg font-bold text-yellow-900 mb-2">
+              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4 mb-2 sm:mb-3">
+                <p className="text-base sm:text-lg font-bold text-yellow-900 mb-1 sm:mb-2">
                   This portal is ONLY for suppliers who can provide the specific
                   products listed below.
                 </p>
-                <p className="text-base text-yellow-800 mb-3">
+                <p className="text-sm sm:text-base text-yellow-800 mb-2 sm:mb-3">
                   If you DO NOT supply these products, please DO NOT continue
                   with this form.
                 </p>
               </div>
-              <div className="bg-white rounded-lg p-4">
-                <h3 className="text-base font-bold text-gray-800 mb-2">
+              <div className="bg-white rounded-none sm:rounded-lg p-2 sm:p-4">
+                <h3 className="text-sm sm:text-base font-bold text-gray-800 mb-1 sm:mb-2">
                   ✅ What You Must Do:
                 </h3>
-                <ul className="list-none space-y-1 text-gray-700 text-sm">
+                <ul className="list-none space-y-1 text-gray-700 text-xs sm:text-sm">
                   <li className="flex items-start gap-2">
                     <span className="text-green-600 font-bold">1.</span>
                     <span>Select the category of products you can supply</span>
