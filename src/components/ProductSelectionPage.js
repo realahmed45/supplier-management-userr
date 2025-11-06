@@ -13,9 +13,8 @@ import {
   ArrowLeft,
   LogOut,
 } from "lucide-react";
-import axios from "axios";
-
-const API_BASE_URL = "https://supplier-mangement-backend.onrender.com/api";
+import apiClient, { authUtils } from "./authutils";
+import Navbar from "./Navbar";
 
 // Product catalog with categories and subcategories
 const PRODUCT_CATALOG = {
@@ -87,7 +86,12 @@ const PRODUCT_CATALOG = {
   },
 };
 
-const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
+const ProductSelectionPage = ({
+  supplierData,
+  updateSupplierData,
+  user,
+  onLogout,
+}) => {
   const navigate = useNavigate();
 
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -98,6 +102,24 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Check authentication on component mount
+  useEffect(() => {
+    const token = authUtils.getToken();
+    if (!token) {
+      console.log("No token found, redirecting to login");
+      navigate("/login");
+      return;
+    }
+
+    // Verify token is valid
+    authUtils.verifyToken().then((result) => {
+      if (!result.success) {
+        console.log("Token verification failed, redirecting to login");
+        navigate("/login");
+      }
+    });
+  }, [navigate]);
+
   // Load existing supplier data if user has it
   useEffect(() => {
     if (user?.hasSupplierData) {
@@ -107,13 +129,10 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
 
   const loadExistingData = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get(
-        `${API_BASE_URL}/suppliers/my-supplier`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      console.log("Loading existing supplier data...");
+      const response = await apiClient.get("/suppliers/my-supplier");
+
+      console.log("Existing supplier data response:", response.data);
 
       if (response.data.success && response.data.supplier?.products) {
         updateSupplierData({
@@ -122,12 +141,18 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
       }
     } catch (error) {
       console.error("Error loading existing data:", error);
+      if (error.response?.status === 401) {
+        navigate("/login");
+      }
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    navigate("/login");
+  const handleLogout = async () => {
+    if (onLogout) {
+      await onLogout();
+    } else {
+      await authUtils.logout(navigate);
+    }
   };
 
   const handleCategorySelect = (category) => {
@@ -208,6 +233,7 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
         selectedSize: details.selectedSize,
         leadTime: details.leadTime,
         description: details.description,
+        unit: "piece", // Default unit
       };
     });
 
@@ -215,14 +241,14 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
     if (user?.hasSupplierData) {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem("authToken");
+        console.log("Updating existing supplier with new products...");
         const allProducts = [
           ...(supplierData.products || []),
           ...productsToAdd,
         ];
 
-        const response = await axios.patch(
-          `${API_BASE_URL}/suppliers/${user.supplierId}/business`,
+        const response = await apiClient.patch(
+          `/suppliers/${user.supplierId}/business`,
           {
             products: allProducts,
             businessType: [],
@@ -233,11 +259,10 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
             paymentTerms: [],
             preferredCurrency: "IDR",
             documents: [],
-          },
-          {
-            headers: { Authorization: `Bearer ${token}` },
           }
         );
+
+        console.log("Products update response:", response.data);
 
         if (response.data.success) {
           updateSupplierData({ products: allProducts });
@@ -248,7 +273,11 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
         }
       } catch (error) {
         console.error("Error adding products:", error);
-        setError("Failed to add products. Please try again.");
+        if (error.response?.status === 401) {
+          navigate("/login");
+        } else {
+          setError("Failed to add products. Please try again.");
+        }
       } finally {
         setIsLoading(false);
       }
@@ -273,10 +302,10 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
     if (user?.hasSupplierData) {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem("authToken");
+        console.log("Removing product from existing supplier...");
 
-        const response = await axios.patch(
-          `${API_BASE_URL}/suppliers/${user.supplierId}/business`,
+        const response = await apiClient.patch(
+          `/suppliers/${user.supplierId}/business`,
           {
             products: updatedProducts,
             businessType: [],
@@ -287,9 +316,6 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
             paymentTerms: [],
             preferredCurrency: "IDR",
             documents: [],
-          },
-          {
-            headers: { Authorization: `Bearer ${token}` },
           }
         );
 
@@ -300,7 +326,11 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
         }
       } catch (error) {
         console.error("Error removing product:", error);
-        setError("Failed to remove product. Please try again.");
+        if (error.response?.status === 401) {
+          navigate("/login");
+        } else {
+          setError("Failed to remove product. Please try again.");
+        }
       } finally {
         setIsLoading(false);
       }
@@ -325,12 +355,15 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 px-2 sm:px-4 lg:px-6 py-4 pb-20">
-      <div className="max-w-6xl mx-auto">
-        {/* Header with logout */}
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4">
-          <div className="flex justify-between items-center">
-            <div className="text-center flex-1">
+    <div className="min-h-screen bg-gray-50">
+      {/* Navigation Bar */}
+      <Navbar user={user} onLogout={onLogout} showFullNav={!!user} />
+
+      <div className="bg-gradient-to-br from-purple-50 to-pink-100 px-2 sm:px-4 lg:px-6 py-4 pb-20">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4">
+            <div className="text-center">
               <div className="flex justify-center items-center gap-3 mb-3">
                 <ShoppingCart className="text-purple-600" size={32} />
                 <Package className="text-green-600" size={32} />
@@ -346,262 +379,292 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
                   : "🎯 Step 1 of 2: Select Products You Supply"}
               </p>
             </div>
-
-            <div className="flex items-center gap-4">
-              {user?.hasSupplierData && (
-                <button
-                  onClick={() => navigate("/dashboard")}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <ArrowLeft size={20} />
-                  Dashboard
-                </button>
-              )}
-
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <LogOut size={20} />
-                Logout
-              </button>
-            </div>
           </div>
-        </div>
 
-        {/* Success/Error Messages */}
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
-            <p className="text-green-600 flex items-center gap-2">
-              <CheckCircle size={16} />
-              {success}
-            </p>
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
-            <p className="text-red-600 flex items-center gap-2">
-              <AlertCircle size={16} />
-              {error}
-            </p>
-          </div>
-        )}
-
-        {/* Show important notice only for new users */}
-        {!user?.hasSupplierData && (
-          <>
-            {/* IMPORTANT NOTICE */}
-            <div className="bg-yellow-50 border-0 sm:border-4 sm:border-yellow-400 sm:rounded-xl shadow-xl p-3 sm:p-6 mb-2 sm:mb-4 -mx-2 sm:mx-0">
-              <div className="flex items-start gap-2 sm:gap-3">
-                <AlertCircle
-                  className="text-yellow-600 flex-shrink-0"
-                  size={24}
-                />
-                <div className="flex-1">
-                  <h2 className="text-lg sm:text-2xl font-bold text-yellow-900 mb-2 sm:mb-3">
-                    ⚠️ IMPORTANT: Read Before Proceeding
-                  </h2>
-                </div>
-              </div>
-            </div>
-
-            {/* First White Section - Edge to Edge on Mobile */}
-            <div className="bg-white p-3 sm:p-4 mb-2 sm:mb-3 -mx-2 sm:mx-0 sm:rounded-lg">
-              <p className="text-lg sm:text-lg font-bold text-yellow-900 mb-2 sm:mb-2">
-                This portal is ONLY for suppliers who can provide the specific
-                products listed below.
+          {/* Success/Error Messages */}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+              <p className="text-green-600 flex items-center gap-2">
+                <CheckCircle size={16} />
+                {success}
               </p>
-              <p className="text-base sm:text-base text-yellow-800">
-                If you DO NOT supply these products, please DO NOT continue with
-                this form.
-              </p>
-            </div>
-
-            {/* Second White Section - Edge to Edge on Mobile */}
-            <div className="bg-white p-3 sm:p-4 mb-4 -mx-2 sm:mx-0 sm:rounded-lg">
-              <h3 className="text-lg sm:text-lg font-bold text-gray-800 mb-3">
-                ✅ What You Must Do:
-              </h3>
-              <ul className="list-none space-y-2 text-gray-700 text-base sm:text-base">
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">1.</span>
-                  <span>Select the category of products you can supply</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">2.</span>
-                  <span>Choose the specific products from our catalog</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">3.</span>
-                  <span>
-                    Provide complete details for each product (brand, size,
-                    price, quantity)
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">4.</span>
-                  <span>
-                    Only AFTER adding products can you continue to the next step
-                  </span>
-                </li>
-              </ul>
-            </div>
-          </>
-        )}
-
-        {/* PRODUCT SELECTION */}
-        <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl shadow-xl p-4 sm:p-6 border-4 border-green-500 mb-4">
-          <div className="mb-4">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <Package className="text-green-600" size={28} />
-              {user?.hasSupplierData
-                ? "Add More Products"
-                : "Select Your Products"}
-            </h2>
-            <p className="text-base text-gray-700 font-semibold">
-              📋 Choose from our catalog below:
-            </p>
-          </div>
-
-          {/* Step 1: Category Selection */}
-          <div className="mb-6">
-            <label className="block text-lg font-bold text-gray-800 mb-3">
-              1️⃣ Select Product Category *
-            </label>
-            <div className="grid grid-cols-1 gap-3">
-              {Object.keys(PRODUCT_CATALOG).map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => handleCategorySelect(category)}
-                  className={`p-4 border-4 rounded-lg text-left transition-all duration-200 flex items-center justify-between ${
-                    selectedCategory === category
-                      ? "border-green-600 bg-green-100 shadow-lg"
-                      : "border-gray-300 hover:border-green-400 bg-white"
-                  }`}
-                >
-                  <span className="text-lg font-bold text-gray-800">
-                    {category}
-                  </span>
-                  {selectedCategory === category && (
-                    <CheckCircle className="text-green-600" size={28} />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Step 2: Subcategory Selection */}
-          {selectedCategory && (
-            <div className="mb-6 animate-fade-in">
-              <label className="block text-lg font-bold text-gray-800 mb-3">
-                2️⃣ Select Product Type *
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {Object.keys(PRODUCT_CATALOG[selectedCategory]).map(
-                  (subcategory) => (
-                    <button
-                      key={subcategory}
-                      type="button"
-                      onClick={() => handleSubcategorySelect(subcategory)}
-                      className={`p-4 border-4 rounded-lg text-left transition-all duration-200 flex items-center justify-between ${
-                        selectedSubcategory === subcategory
-                          ? "border-green-600 bg-green-100 shadow-lg"
-                          : "border-gray-300 hover:border-green-400 bg-white"
-                      }`}
-                    >
-                      <span className="text-lg font-bold text-gray-800">
-                        {subcategory}
-                      </span>
-                      {selectedSubcategory === subcategory && (
-                        <CheckCircle className="text-green-600" size={28} />
-                      )}
-                    </button>
-                  )
-                )}
-              </div>
             </div>
           )}
 
-          {/* Step 3: Product Selection */}
-          {selectedSubcategory && (
-            <div className="mb-6 animate-fade-in">
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+              <p className="text-red-600 flex items-center gap-2">
+                <AlertCircle size={16} />
+                {error}
+              </p>
+            </div>
+          )}
+
+          {/* Show important notice only for new users */}
+          {!user?.hasSupplierData && (
+            <>
+              {/* IMPORTANT NOTICE */}
+              <div className="bg-yellow-50 border-0 sm:border-4 sm:border-yellow-400 sm:rounded-xl shadow-xl p-3 sm:p-6 mb-2 sm:mb-4 -mx-2 sm:mx-0">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <AlertCircle
+                    className="text-yellow-600 flex-shrink-0"
+                    size={24}
+                  />
+                  <div className="flex-1">
+                    <h2 className="text-lg sm:text-2xl font-bold text-yellow-900 mb-2 sm:mb-3">
+                      ⚠️ IMPORTANT: Read Before Proceeding
+                    </h2>
+                  </div>
+                </div>
+              </div>
+
+              {/* First White Section - Edge to Edge on Mobile */}
+              <div className="bg-white p-3 sm:p-4 mb-2 sm:mb-3 -mx-2 sm:mx-0 sm:rounded-lg">
+                <p className="text-lg sm:text-lg font-bold text-yellow-900 mb-2 sm:mb-2">
+                  This portal is ONLY for suppliers who can provide the specific
+                  products listed below.
+                </p>
+                <p className="text-base sm:text-base text-yellow-800">
+                  If you DO NOT supply these products, please DO NOT continue
+                  with this form.
+                </p>
+              </div>
+
+              {/* Second White Section - Edge to Edge on Mobile */}
+              <div className="bg-white p-3 sm:p-4 mb-4 -mx-2 sm:mx-0 sm:rounded-lg">
+                <h3 className="text-lg sm:text-lg font-bold text-gray-800 mb-3">
+                  ✅ What You Must Do:
+                </h3>
+                <ul className="list-none space-y-2 text-gray-700 text-base sm:text-base">
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-600 font-bold">1.</span>
+                    <span>Select the category of products you can supply</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-600 font-bold">2.</span>
+                    <span>Choose the specific products from our catalog</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-600 font-bold">3.</span>
+                    <span>
+                      Provide complete details for each product (brand, size,
+                      price, quantity)
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-600 font-bold">4.</span>
+                    <span>
+                      Only AFTER adding products can you continue to the next
+                      step
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </>
+          )}
+
+          {/* PRODUCT SELECTION */}
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl shadow-xl p-4 sm:p-6 border-4 border-green-500 mb-4">
+            <div className="mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <Package className="text-green-600" size={28} />
+                {user?.hasSupplierData
+                  ? "Add More Products"
+                  : "Select Your Products"}
+              </h2>
+              <p className="text-base text-gray-700 font-semibold">
+                📋 Choose from our catalog below:
+              </p>
+            </div>
+
+            {/* Step 1: Category Selection */}
+            <div className="mb-6">
               <label className="block text-lg font-bold text-gray-800 mb-3">
-                3️⃣ Select Products (You can select multiple) *
+                1️⃣ Select Product Category *
               </label>
-              <div className="space-y-3">
-                {PRODUCT_CATALOG[selectedCategory][selectedSubcategory].map(
-                  (product) => (
-                    <div
-                      key={product.id}
-                      className={`border-4 rounded-lg p-4 transition-all duration-200 ${
-                        selectedProducts.some((p) => p.id === product.id)
-                          ? "border-green-600 bg-green-50 shadow-lg"
-                          : "border-gray-300 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-center mb-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedProducts.some(
-                            (p) => p.id === product.id
-                          )}
-                          onChange={() => handleProductToggle(product)}
-                          className="mr-3 h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                        />
-                        <span className="font-bold text-gray-800 text-lg">
-                          {product.name}
+              <div className="grid grid-cols-1 gap-3">
+                {Object.keys(PRODUCT_CATALOG).map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => handleCategorySelect(category)}
+                    className={`p-4 border-4 rounded-lg text-left transition-all duration-200 flex items-center justify-between ${
+                      selectedCategory === category
+                        ? "border-green-600 bg-green-100 shadow-lg"
+                        : "border-gray-300 hover:border-green-400 bg-white"
+                    }`}
+                  >
+                    <span className="text-lg font-bold text-gray-800">
+                      {category}
+                    </span>
+                    {selectedCategory === category && (
+                      <CheckCircle className="text-green-600" size={28} />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 2: Subcategory Selection */}
+            {selectedCategory && (
+              <div className="mb-6 animate-fade-in">
+                <label className="block text-lg font-bold text-gray-800 mb-3">
+                  2️⃣ Select Product Type *
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.keys(PRODUCT_CATALOG[selectedCategory]).map(
+                    (subcategory) => (
+                      <button
+                        key={subcategory}
+                        type="button"
+                        onClick={() => handleSubcategorySelect(subcategory)}
+                        className={`p-4 border-4 rounded-lg text-left transition-all duration-200 flex items-center justify-between ${
+                          selectedSubcategory === subcategory
+                            ? "border-green-600 bg-green-100 shadow-lg"
+                            : "border-gray-300 hover:border-green-400 bg-white"
+                        }`}
+                      >
+                        <span className="text-lg font-bold text-gray-800">
+                          {subcategory}
                         </span>
-                      </div>
+                        {selectedSubcategory === subcategory && (
+                          <CheckCircle className="text-green-600" size={28} />
+                        )}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
 
-                      {/* Product Details Form */}
-                      {selectedProducts.some((p) => p.id === product.id) && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 animate-fade-in bg-white p-3 sm:p-4 border-2 border-green-200 -mx-4 sm:mx-8 sm:rounded-lg">
-                          <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Brand Name *
-                            </label>
-                            <select
-                              value={
-                                productDetails[product.id]?.brandName ||
-                                product.brands[0]
-                              }
-                              onChange={(e) =>
-                                handleProductDetailChange(
-                                  product.id,
-                                  "brandName",
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                              required
-                            >
-                              {product.brands.map((brand) => (
-                                <option key={brand} value={brand}>
-                                  {brand}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+            {/* Step 3: Product Selection */}
+            {selectedSubcategory && (
+              <div className="mb-6 animate-fade-in">
+                <label className="block text-lg font-bold text-gray-800 mb-3">
+                  3️⃣ Select Products (You can select multiple) *
+                </label>
+                <div className="space-y-3">
+                  {PRODUCT_CATALOG[selectedCategory][selectedSubcategory].map(
+                    (product) => (
+                      <div
+                        key={product.id}
+                        className={`border-4 rounded-lg p-4 transition-all duration-200 ${
+                          selectedProducts.some((p) => p.id === product.id)
+                            ? "border-green-600 bg-green-50 shadow-lg"
+                            : "border-gray-300 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center mb-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedProducts.some(
+                              (p) => p.id === product.id
+                            )}
+                            onChange={() => handleProductToggle(product)}
+                            className="mr-3 h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                          />
+                          <span className="font-bold text-gray-800 text-lg">
+                            {product.name}
+                          </span>
+                        </div>
 
-                          {productDetails[product.id]?.brandName ===
-                            "Other" && (
+                        {/* Product Details Form */}
+                        {selectedProducts.some((p) => p.id === product.id) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 animate-fade-in bg-white p-3 sm:p-4 border-2 border-green-200 -mx-4 sm:mx-8 sm:rounded-lg">
                             <div>
                               <label className="block text-sm font-bold text-gray-700 mb-1">
-                                Custom Brand Name *
+                                Brand Name *
                               </label>
-                              <input
-                                type="text"
-                                placeholder="Enter brand name"
+                              <select
                                 value={
-                                  productDetails[product.id]?.customBrandName ||
-                                  ""
+                                  productDetails[product.id]?.brandName ||
+                                  product.brands[0]
                                 }
                                 onChange={(e) =>
                                   handleProductDetailChange(
                                     product.id,
-                                    "customBrandName",
+                                    "brandName",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                                required
+                              >
+                                {product.brands.map((brand) => (
+                                  <option key={brand} value={brand}>
+                                    {brand}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {productDetails[product.id]?.brandName ===
+                              "Other" && (
+                              <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">
+                                  Custom Brand Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="Enter brand name"
+                                  value={
+                                    productDetails[product.id]
+                                      ?.customBrandName || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleProductDetailChange(
+                                      product.id,
+                                      "customBrandName",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                                  required
+                                />
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Size/Package *
+                              </label>
+                              <select
+                                value={
+                                  productDetails[product.id]?.selectedSize ||
+                                  product.sizes[0]
+                                }
+                                onChange={(e) =>
+                                  handleProductDetailChange(
+                                    product.id,
+                                    "selectedSize",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                              >
+                                {product.sizes.map((size) => (
+                                  <option key={size} value={size}>
+                                    {size}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Minimum Order Quantity *
+                              </label>
+                              <input
+                                type="number"
+                                placeholder="e.g., 100"
+                                value={
+                                  productDetails[product.id]
+                                    ?.minOrderQuantity || ""
+                                }
+                                onChange={(e) =>
+                                  handleProductDetailChange(
+                                    product.id,
+                                    "minOrderQuantity",
                                     e.target.value
                                   )
                                 }
@@ -609,248 +672,202 @@ const ProductSelectionPage = ({ supplierData, updateSupplierData, user }) => {
                                 required
                               />
                             </div>
-                          )}
 
-                          <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Size/Package *
-                            </label>
-                            <select
-                              value={
-                                productDetails[product.id]?.selectedSize ||
-                                product.sizes[0]
-                              }
-                              onChange={(e) =>
-                                handleProductDetailChange(
-                                  product.id,
-                                  "selectedSize",
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                            >
-                              {product.sizes.map((size) => (
-                                <option key={size} value={size}>
-                                  {size}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                            <div>
+                              <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Price (IDR) *
+                              </label>
+                              <input
+                                type="number"
+                                placeholder="Enter price"
+                                value={productDetails[product.id]?.price || ""}
+                                onChange={(e) =>
+                                  handleProductDetailChange(
+                                    product.id,
+                                    "price",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                                required
+                              />
+                            </div>
 
-                          <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Minimum Order Quantity *
-                            </label>
-                            <input
-                              type="number"
-                              placeholder="e.g., 100"
-                              value={
-                                productDetails[product.id]?.minOrderQuantity ||
-                                ""
-                              }
-                              onChange={(e) =>
-                                handleProductDetailChange(
-                                  product.id,
-                                  "minOrderQuantity",
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                              required
-                            />
-                          </div>
+                            <div>
+                              <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Delivery time (days)
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g., 2-4 days"
+                                value={
+                                  productDetails[product.id]?.leadTime || ""
+                                }
+                                onChange={(e) =>
+                                  handleProductDetailChange(
+                                    product.id,
+                                    "leadTime",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                              />
+                            </div>
 
-                          <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Price *
-                            </label>
-                            <input
-                              type="number"
-                              placeholder="Enter price"
-                              value={productDetails[product.id]?.price || ""}
-                              onChange={(e) =>
-                                handleProductDetailChange(
-                                  product.id,
-                                  "price",
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                              required
-                            />
+                            <div className="sm:col-span-2">
+                              <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Additional notes if needed (optional)
+                              </label>
+                              <textarea
+                                value={
+                                  productDetails[product.id]?.description || ""
+                                }
+                                onChange={(e) =>
+                                  handleProductDetailChange(
+                                    product.id,
+                                    "description",
+                                    e.target.value
+                                  )
+                                }
+                                rows="2"
+                                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                              />
+                            </div>
                           </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
 
-                          <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Delivery time (days)
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="e.g., 2-4 days"
-                              value={productDetails[product.id]?.leadTime || ""}
-                              onChange={(e) =>
-                                handleProductDetailChange(
-                                  product.id,
-                                  "leadTime",
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label className="block text-sm font-bold text-gray-700 mb-1">
-                              Additional notes if needed (optional)
-                            </label>
-                            <textarea
-                              value={
-                                productDetails[product.id]?.description || ""
-                              }
-                              onChange={(e) =>
-                                handleProductDetailChange(
-                                  product.id,
-                                  "description",
-                                  e.target.value
-                                )
-                              }
-                              rows="2"
-                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
+                {selectedProducts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={addSelectedProducts}
+                    disabled={isLoading}
+                    className="mt-4 w-full px-6 py-3 bg-green-600 text-white text-lg font-bold rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                    ) : (
+                      <Plus size={20} />
+                    )}
+                    {isLoading
+                      ? "Adding..."
+                      : `Add Selected Products (${selectedProducts.length}) to Application`}
+                  </button>
                 )}
               </div>
+            )}
 
-              {selectedProducts.length > 0 && (
-                <button
-                  type="button"
-                  onClick={addSelectedProducts}
-                  disabled={isLoading}
-                  className="mt-4 w-full px-6 py-3 bg-green-600 text-white text-lg font-bold rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
-                  ) : (
-                    <Plus size={20} />
-                  )}
-                  {isLoading
-                    ? "Adding..."
-                    : `Add Selected Products (${selectedProducts.length}) to Application`}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Added Products Summary */}
-          {supplierData.products?.length > 0 && (
-            <div className="mt-6 bg-white rounded-lg p-4 border-4 border-green-500">
-              <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <CheckCircle className="text-green-600" size={20} />✅ Products
-                Added ({supplierData.products.length})
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b-2 border-gray-300">
-                      <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
-                        Product
-                      </th>
-                      <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
-                        Brand
-                      </th>
-                      <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
-                        Size
-                      </th>
-                      <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
-                        Price
-                      </th>
-                      <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {supplierData.products.map((product, index) => (
-                      <tr
-                        key={index}
-                        className="border-b border-gray-200 hover:bg-gray-50"
-                      >
-                        <td className="py-2 px-3 font-medium text-gray-800 text-sm">
-                          {product.name}
-                        </td>
-                        <td className="py-2 px-3 text-gray-600 text-sm">
-                          {product.brandName}
-                        </td>
-                        <td className="py-2 px-3 text-gray-600 text-sm">
-                          {product.selectedSize}
-                        </td>
-                        <td className="py-2 px-3 font-semibold text-green-600 text-sm">
-                          {product.price}
-                        </td>
-                        <td className="py-2 px-3">
-                          <button
-                            type="button"
-                            onClick={() => removeProduct(index)}
-                            disabled={isLoading}
-                            className="text-red-600 hover:text-red-800 font-medium flex items-center gap-1 text-sm disabled:opacity-50"
-                          >
-                            <X size={16} />
-                            Remove
-                          </button>
-                        </td>
+            {/* Added Products Summary */}
+            {supplierData.products?.length > 0 && (
+              <div className="mt-6 bg-white rounded-lg p-4 border-4 border-green-500">
+                <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <CheckCircle className="text-green-600" size={20} />✅
+                  Products Added ({supplierData.products.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b-2 border-gray-300">
+                        <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
+                          Product
+                        </th>
+                        <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
+                          Brand
+                        </th>
+                        <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
+                          Size
+                        </th>
+                        <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
+                          Price
+                        </th>
+                        <th className="text-left py-2 px-3 font-bold text-gray-700 text-sm">
+                          Actions
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {supplierData.products.map((product, index) => (
+                        <tr
+                          key={index}
+                          className="border-b border-gray-200 hover:bg-gray-50"
+                        >
+                          <td className="py-2 px-3 font-medium text-gray-800 text-sm">
+                            {product.name}
+                          </td>
+                          <td className="py-2 px-3 text-gray-600 text-sm">
+                            {product.brandName}
+                          </td>
+                          <td className="py-2 px-3 text-gray-600 text-sm">
+                            {product.selectedSize}
+                          </td>
+                          <td className="py-2 px-3 font-semibold text-green-600 text-sm">
+                            IDR {product.price}
+                          </td>
+                          <td className="py-2 px-3">
+                            <button
+                              type="button"
+                              onClick={() => removeProduct(index)}
+                              disabled={isLoading}
+                              className="text-red-600 hover:text-red-800 font-medium flex items-center gap-1 text-sm disabled:opacity-50"
+                            >
+                              <X size={16} />
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Continue Button - Only shows if products are added */}
+          {supplierData.products?.length > 0 && (
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+              <div className="text-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                  🎉 Great! You've added {supplierData.products.length}{" "}
+                  product(s)
+                </h3>
+                <p className="text-base text-gray-600">
+                  {user?.hasSupplierData
+                    ? "Products updated successfully. Return to your dashboard or add more products."
+                    : "Click below to continue with your company information"}
+                </p>
+              </div>
+              <div className="flex justify-center">
+                <button
+                  onClick={handleContinue}
+                  className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-lg font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center gap-2 shadow-lg"
+                >
+                  {user?.hasSupplierData
+                    ? "Back to Dashboard"
+                    : "Continue to Company Information"}
+                  <ArrowRight size={20} />
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Continue Button - Only shows if products are added */}
-        {supplierData.products?.length > 0 && (
-          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
-            <div className="text-center mb-4">
-              <h3 className="text-xl font-bold text-gray-800 mb-2">
-                🎉 Great! You've added {supplierData.products.length} product(s)
-              </h3>
-              <p className="text-base text-gray-600">
-                {user?.hasSupplierData
-                  ? "Products updated successfully. Return to your dashboard or add more products."
-                  : "Click below to continue with your company information"}
-              </p>
+        {/* Fixed Support Box */}
+        <div className="fixed top-20 right-2 bg-white rounded-lg shadow-lg p-3 max-w-xs border border-purple-200 z-40">
+          <div className="flex items-center gap-2">
+            <div className="bg-purple-100 p-1 rounded-full">
+              <MessageCircle className="text-purple-600" size={16} />
             </div>
-            <div className="flex justify-center">
-              <button
-                onClick={handleContinue}
-                className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-lg font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center gap-2 shadow-lg"
-              >
-                {user?.hasSupplierData
-                  ? "Back to Dashboard"
-                  : "Continue to Company Information"}
-                <ArrowRight size={20} />
+            <div className="flex-1">
+              <h3 className="font-bold text-gray-800 text-sm">Need Help?</h3>
+              <button className="w-full flex items-center gap-1 px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition-colors mt-1">
+                <Phone size={12} />
+                +620864322626
               </button>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Fixed Support Box - Much Smaller */}
-      <div className="fixed top-4 right-2 bg-white rounded-lg shadow-lg p-3 max-w-xs border border-purple-200 z-50">
-        <div className="flex items-center gap-2">
-          <div className="bg-purple-100 p-1 rounded-full">
-            <MessageCircle className="text-purple-600" size={16} />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-gray-800 text-sm">Need Help?</h3>
-            <button className="w-full flex items-center gap-1 px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition-colors mt-1">
-              <Phone size={12} />
-              +620864322626
-            </button>
           </div>
         </div>
       </div>

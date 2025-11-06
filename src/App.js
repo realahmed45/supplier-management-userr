@@ -10,9 +10,7 @@ import ProfilePage from "./components/ProfilePage";
 import SubmissionSuccess from "./components/SubmissionSuccess";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
-import axios from "axios";
-
-const API_BASE_URL = "https://supplier-mangement-backend.onrender.com/api";
+import { authUtils } from "./components/authutils";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -55,7 +53,8 @@ function App() {
   }, []);
 
   const checkAuthStatus = async () => {
-    const token = localStorage.getItem("authToken");
+    const token = authUtils.getToken();
+    console.log("Checking auth status, token present:", !!token);
 
     if (!token) {
       setIsLoading(false);
@@ -63,36 +62,46 @@ function App() {
     }
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/auth/verify-token`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await authUtils.verifyToken();
+      console.log("Token verification response:", response);
 
-      if (response.data.success) {
-        setUser(response.data.user);
+      if (response.success) {
+        setUser(response.user);
         setIsAuthenticated(true);
+        console.log("User authenticated:", response.user);
       } else {
-        localStorage.removeItem("authToken");
+        console.log("Token verification failed, removing token");
+        authUtils.removeToken();
       }
     } catch (error) {
       console.error("Auth check failed:", error);
-      localStorage.removeItem("authToken");
+      authUtils.removeToken();
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleLogin = (userData) => {
+    console.log("Login successful, user data:", userData);
     setUser(userData);
     setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem("authToken");
+  const handleLogout = async () => {
+    console.log("Logging out user");
+    try {
+      await authUtils.logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+      // Don't need to manually remove token as authUtils.logout() handles it
+    }
   };
 
   const updateSupplierData = (newData) => {
+    console.log("Updating supplier data:", newData);
     setSupplierData((prev) => ({ ...prev, ...newData }));
   };
 
@@ -122,17 +131,26 @@ function App() {
                   replace
                 />
               ) : (
-                <Login onLogin={handleLogin} />
+                <Login
+                  onLogin={handleLogin}
+                  onLogout={handleLogout}
+                  isLoggedIn={isAuthenticated}
+                />
               )
             }
           />
 
-          {/* Dashboard Route - Protected */}
+          {/* Dashboard Route - For existing suppliers */}
           <Route
             path="/dashboard"
             element={
               isAuthenticated ? (
-                <Dashboard user={user} onLogout={handleLogout} />
+                user?.hasSupplierData ? (
+                  <Dashboard user={user} onLogout={handleLogout} />
+                ) : (
+                  // New user should go to product selection first
+                  <Navigate to="/" replace />
+                )
               ) : (
                 <Navigate to="/login" replace />
               )
@@ -144,10 +162,34 @@ function App() {
             path="/"
             element={
               isAuthenticated ? (
+                user?.hasSupplierData ? (
+                  // Existing supplier should go to dashboard by default
+                  <Navigate to="/dashboard" replace />
+                ) : (
+                  // New user starts here
+                  <ProductSelectionPage
+                    supplierData={supplierData}
+                    updateSupplierData={updateSupplierData}
+                    user={user}
+                    onLogout={handleLogout}
+                  />
+                )
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+
+          {/* Add Products Route - For adding products to existing supplier */}
+          <Route
+            path="/add-products"
+            element={
+              isAuthenticated ? (
                 <ProductSelectionPage
                   supplierData={supplierData}
                   updateSupplierData={updateSupplierData}
                   user={user}
+                  onLogout={handleLogout}
                 />
               ) : (
                 <Navigate to="/login" replace />
@@ -164,6 +206,7 @@ function App() {
                   supplierData={supplierData}
                   updateSupplierData={updateSupplierData}
                   user={user}
+                  onLogout={handleLogout}
                 />
               ) : (
                 <Navigate to="/login" replace />
@@ -176,14 +219,14 @@ function App() {
             path="/success"
             element={
               isAuthenticated ? (
-                <SubmissionSuccess />
+                <SubmissionSuccess onLogout={handleLogout} />
               ) : (
                 <Navigate to="/login" replace />
               )
             }
           />
 
-          {/* Redirect any other routes */}
+          {/* Redirect any other routes based on user status */}
           <Route
             path="*"
             element={

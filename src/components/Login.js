@@ -10,12 +10,14 @@ import {
   Eye,
   EyeOff,
   Smartphone,
+  LogOut,
 } from "lucide-react";
 import axios from "axios";
+import { authUtils } from "./authutils";
 
 const API_BASE_URL = "https://supplier-mangement-backend.onrender.com/api";
 
-const Login = ({ onLogin }) => {
+const Login = ({ onLogin, onLogout, isLoggedIn }) => {
   const [step, setStep] = useState("phone"); // 'phone' or 'otp'
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
@@ -39,6 +41,31 @@ const Login = ({ onLogin }) => {
     }, 1000);
   };
 
+  // Logout function
+  const handleLogout = async () => {
+    setIsLoading(true);
+    try {
+      await authUtils.logout(navigate);
+
+      // Call parent logout handler
+      if (onLogout) {
+        onLogout();
+      }
+
+      // Reset component state
+      setStep("phone");
+      setPhoneNumber("");
+      setOtp("");
+      setError("");
+      setShowOtp(false);
+      setResendTimer(0);
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -53,9 +80,13 @@ const Login = ({ onLogin }) => {
     setIsLoading(true);
 
     try {
+      console.log("Sending OTP request for phone:", phoneNumber);
+
       const response = await axios.post(`${API_BASE_URL}/auth/generate-otp`, {
         phone: phoneNumber,
       });
+
+      console.log("OTP response:", response.data);
 
       if (response.data.success) {
         setStep("otp");
@@ -90,22 +121,38 @@ const Login = ({ onLogin }) => {
     setIsLoading(true);
 
     try {
+      console.log("Verifying OTP:", otp, "for phone:", phoneNumber);
+
       const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
         phone: phoneNumber,
         otp: otp,
       });
 
+      console.log("OTP verification response:", response.data);
+
       if (response.data.success) {
-        // Store token
-        localStorage.setItem("authToken", response.data.token);
+        // Store token using auth utility
+        console.log(
+          "Login successful, storing token:",
+          response.data.token.substring(0, 20) + "..."
+        );
+        authUtils.setToken(response.data.token);
+
+        // Verify the token was stored
+        const storedToken = authUtils.getToken();
+        console.log("Token stored successfully:", !!storedToken);
 
         // Call parent login handler
-        onLogin(response.data.user);
+        if (onLogin) {
+          onLogin(response.data.user);
+        }
 
         // Navigate based on user state
         if (response.data.user.hasSupplierData) {
+          console.log("User has supplier data, navigating to dashboard");
           navigate("/dashboard");
         } else {
+          console.log("User is new, navigating to product selection");
           navigate("/");
         }
       } else {
@@ -161,6 +208,61 @@ const Login = ({ onLogin }) => {
     }
     return phone;
   };
+
+  // If user is logged in, show logout option instead of login form
+  if (isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="bg-white rounded-full p-4 w-20 h-20 mx-auto mb-4 shadow-lg">
+              <Shield className="w-12 h-12 text-purple-600 mx-auto" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+              Supplier Portal
+            </h1>
+            <p className="text-gray-600">You are already logged in</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <div className="text-center space-y-6">
+              <p className="text-gray-700">
+                You are currently logged into the Supplier Portal.
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  Go to Dashboard
+                  <ArrowRight size={20} />
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoading}
+                  className="w-full bg-gray-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                      Logging out...
+                    </>
+                  ) : (
+                    <>
+                      <LogOut size={20} />
+                      Logout
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 flex items-center justify-center p-4">

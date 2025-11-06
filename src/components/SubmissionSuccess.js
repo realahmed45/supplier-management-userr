@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   CheckCircle,
   Building2,
@@ -16,11 +16,15 @@ import {
   Package,
   Warehouse,
   Calendar,
+  LogOut,
+  Settings,
 } from "lucide-react";
+import { authUtils } from "./authutils";
 
-const SubmissionSuccess = () => {
+const SubmissionSuccess = ({ onLogout }) => {
   const [showConfetti, setShowConfetti] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Hide confetti effect after 3 seconds
@@ -39,6 +43,23 @@ const SubmissionSuccess = () => {
     };
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await authUtils.logout(navigate);
+      if (onLogout) {
+        onLogout();
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Even if logout fails, redirect
+      navigate("/login");
+    }
+  };
+
+  const goToDashboard = () => {
+    navigate("/dashboard");
+  };
+
   const applicationId = `SP-${Date.now().toString().slice(-6)}`;
   const submissionDate = new Date().toLocaleDateString("en-US", {
     year: "numeric",
@@ -50,6 +71,26 @@ const SubmissionSuccess = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 p-6 relative overflow-hidden">
+      {/* Header with logout */}
+      <div className="absolute top-4 right-4 z-50">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={goToDashboard}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors shadow-md"
+          >
+            <Settings size={20} />
+            Dashboard
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors shadow-md"
+          >
+            <LogOut size={20} />
+            Logout
+          </button>
+        </div>
+      </div>
+
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-4 -right-4 w-24 h-24 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full opacity-20 animate-bounce"></div>
@@ -91,7 +132,7 @@ const SubmissionSuccess = () => {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto relative z-20">
+      <div className="max-w-6xl mx-auto relative z-20 pt-16">
         {/* Success Header */}
         <div className="text-center mb-12">
           <div className="relative inline-block mb-8">
@@ -153,13 +194,7 @@ const SubmissionSuccess = () => {
             <h3 className="text-xl font-bold text-gray-800 mb-3">
               Application Received
             </h3>
-            <p className="text-gray-600 leading-relaxed">
-              Your application has been recived
-            </p>
-            <div className="mt-4 flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-              <span className="text-green-600 font-medium">Complete</span>
-            </div>
+            <p className="text-green-600 font-medium">✅ Complete</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 text-center border-l-4 border-yellow-500 transform hover:scale-105 transition-all duration-300">
@@ -169,13 +204,12 @@ const SubmissionSuccess = () => {
             <h3 className="text-xl font-bold text-gray-800 mb-3">
               Under Review
             </h3>
-            <p className="text-gray-600 leading-relaxed">
+            <p className="text-gray-600 leading-relaxed mb-4">
               Your application is under review. Please allow 3 to 5 business
               days. If you need any help with adding more products or have
-              questions about your application, feel free to call
-              us at this number
+              questions about your application, feel free to call us.
             </p>
-            <div className="mt-4 flex items-center justify-center">
+            <div className="flex items-center justify-center">
               <div className="w-5 h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mr-2"></div>
               <span className="text-yellow-600 font-medium">In Progress</span>
             </div>
@@ -186,19 +220,16 @@ const SubmissionSuccess = () => {
               <Users className="h-8 w-8 text-blue-600" />
             </div>
             <h3 className="text-xl font-bold text-gray-800 mb-3">
-              Team Contact
+              Partnership Launch
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              for any help call this number 08xxxxxx
+              Upon approval, you'll gain full access to our supplier portal and
+              begin receiving purchase orders.
             </p>
-            <div className="mt-4 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-blue-500 mr-2" />
-              <span className="text-blue-600 font-medium">Pending</span>
-            </div>
           </div>
         </div>
 
-        {/* Detailed Next Steps */}
+        {/* Next Steps */}
         <div className="bg-white rounded-2xl shadow-xl p-10 mb-12">
           <h2 className="text-3xl font-bold text-gray-800 mb-8 flex items-center gap-3">
             <Star className="text-yellow-500" />
@@ -215,7 +246,10 @@ const SubmissionSuccess = () => {
                   <h4 className="text-lg font-bold text-gray-800 mb-2">
                     Document Verification
                   </h4>
-                  <p className="text-gray-600 leading-relaxed"></p>
+                  <p className="text-gray-600 leading-relaxed">
+                    Our team will verify your company information and product
+                    details to ensure compliance with our standards.
+                  </p>
                 </div>
               </div>
 
@@ -227,7 +261,10 @@ const SubmissionSuccess = () => {
                   <h4 className="text-lg font-bold text-gray-800 mb-2">
                     Quality Assessment
                   </h4>
-                  <p className="text-gray-600 leading-relaxed"></p>
+                  <p className="text-gray-600 leading-relaxed">
+                    We'll evaluate your product quality and capabilities to
+                    ensure they meet our procurement requirements.
+                  </p>
                 </div>
               </div>
 
@@ -239,7 +276,10 @@ const SubmissionSuccess = () => {
                   <h4 className="text-lg font-bold text-gray-800 mb-2">
                     Compliance Check
                   </h4>
-                  <p className="text-gray-600 leading-relaxed"></p>
+                  <p className="text-gray-600 leading-relaxed">
+                    Final compliance verification to ensure all regulatory and
+                    business requirements are met.
+                  </p>
                 </div>
               </div>
             </div>
@@ -286,7 +326,8 @@ const SubmissionSuccess = () => {
                     Partnership Launch
                   </h4>
                   <p className="text-gray-600 leading-relaxed">
-                    Begin receiving purchase orders and do business with us.
+                    Begin receiving purchase orders and conducting business with
+                    us through our streamlined procurement process.
                   </p>
                 </div>
               </div>
@@ -299,7 +340,10 @@ const SubmissionSuccess = () => {
           <div className="text-center mb-8">
             <Mail className="h-16 w-16 mx-auto mb-6 opacity-90" />
             <h3 className="text-2xl font-bold mb-4">Stay Connected</h3>
-            <p className="text-lg mb-8 opacity-90 max-w-2xl mx-auto leading-relaxed"></p>
+            <p className="text-lg mb-8 opacity-90 max-w-2xl mx-auto leading-relaxed">
+              Our team is here to support you throughout the review process.
+              Feel free to reach out with any questions.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -311,7 +355,7 @@ const SubmissionSuccess = () => {
             <div className="flex flex-col items-center text-center p-4 bg-white bg-opacity-10 rounded-xl backdrop-blur-sm">
               <Phone className="h-8 w-8 mb-3" />
               <h4 className="font-bold mb-1">Phone</h4>
-              <span className="text-sm opacity-90">+1 (555) 123-4567</span>
+              <span className="text-sm opacity-90">+620864322626</span>
             </div>
             <div className="flex flex-col items-center text-center p-4 bg-white bg-opacity-10 rounded-xl backdrop-blur-sm">
               <Building2 className="h-8 w-8 mb-3" />
@@ -326,123 +370,6 @@ const SubmissionSuccess = () => {
           </div>
         </div>
 
-        {/* Enhanced Timeline */}
-        <div className="bg-white rounded-2xl shadow-xl p-10 mb-12">
-          <h3 className="text-2xl font-bold text-gray-800 mb-8 text-center flex items-center justify-center gap-2">
-            <Calendar className="text-blue-600" />
-            Expected Timeline & Milestones
-          </h3>
-
-          <div className="relative max-w-4xl mx-auto">
-            <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-1 bg-gradient-to-b from-green-500 via-yellow-500 to-gray-300 rounded-full"></div>
-
-            <div className="space-y-12">
-              <div className="flex items-center">
-                <div className="flex-1 text-right pr-8">
-                  <h4 className="text-lg font-bold text-gray-800">
-                    Application Submitted
-                  </h4>
-                  <p className="text-gray-600">
-                    Today - {new Date().toLocaleDateString()}
-                  </p>
-                  <p className="text-sm text-green-600 mt-1">
-                    All required information received
-                  </p>
-                </div>
-                <div className="relative">
-                  <div className="w-6 h-6 bg-green-500 rounded-full border-4 border-white shadow-lg z-10 relative">
-                    <CheckCircle className="w-4 h-4 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-                  </div>
-                </div>
-                <div className="flex-1 pl-8">
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <p className="text-green-700 font-medium">✅ Complete</p>
-                    <p className="text-green-600 text-sm">
-                      Successfully processed
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center">
-                <div className="flex-1 text-right pr-8">
-                  <h4 className="text-lg font-bold text-gray-800">
-                    Initial Review & Verification
-                  </h4>
-                  <p className="text-gray-600">4-5 Business Days</p>
-                  <p className="text-sm text-yellow-600 mt-1">
-                    Document verification in progress
-                  </p>
-                </div>
-                <div className="relative">
-                  <div className="w-6 h-6 bg-yellow-500 rounded-full border-4 border-white shadow-lg animate-pulse">
-                    <div className="w-2 h-2 bg-white rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-ping"></div>
-                  </div>
-                </div>
-                <div className="flex-1 pl-8">
-                  <div className="bg-yellow-50 p-3 rounded-lg">
-                    <p className="text-yellow-700 font-medium">
-                      🔄 In Progress
-                    </p>
-                    <p className="text-yellow-600 text-sm">
-                      Add more product and help with profile ,call us on
-                      08-xxxxxx and we help you
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center">
-                <div className="flex-1 text-right pr-8">
-                  <h4 className="text-lg font-bold text-gray-800">
-                    Comprehensive Assessment
-                  </h4>
-                  <p className="text-gray-600">5-7 Business Days</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Quality and compliance evaluation
-                  </p>
-                </div>
-                <div className="relative">
-                  <div className="w-6 h-6 bg-gray-300 rounded-full border-4 border-white shadow-lg"></div>
-                </div>
-                <div className="flex-1 pl-8">
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-gray-700 font-medium">⏳ Pending</p>
-                    <p className="text-gray-600 text-sm">
-                      Add more product and help with profile ,call us on
-                      08-xxxxxx and we help you
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center">
-                <div className="flex-1 text-right pr-8">
-                  <h4 className="text-lg font-bold text-gray-800">
-                    Final Decision & Notification
-                  </h4>
-                  <p className="text-gray-600">7-14 Business Days</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Decision communication and next steps
-                  </p>
-                </div>
-                <div className="relative">
-                  <div className="w-6 h-6 bg-gray-300 rounded-full border-4 border-white shadow-lg"></div>
-                </div>
-                <div className="flex-1 pl-8">
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-gray-700 font-medium">⏳ Pending</p>
-                    <p className="text-gray-600 text-sm">
-                      Add more product and help with profile ,call us on
-                      08-xxxxxx and we help you
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Additional Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           <div className="bg-white rounded-2xl shadow-lg p-6 text-center hover:shadow-xl transition-all duration-300">
@@ -450,7 +377,7 @@ const SubmissionSuccess = () => {
             <h4 className="font-bold text-gray-800 mb-2">Quality Standards</h4>
             <p className="text-gray-600 text-sm">
               Learn about our quality requirements and certification processes
-              by calling us
+              by calling us.
             </p>
           </div>
 
@@ -459,7 +386,7 @@ const SubmissionSuccess = () => {
             <h4 className="font-bold text-gray-800 mb-2">Product Guidelines</h4>
             <p className="text-gray-600 text-sm">
               You can add new products at any time and upload additional
-              documentation whenever needed.
+              documentation whenever needed.
             </p>
           </div>
 
@@ -467,9 +394,8 @@ const SubmissionSuccess = () => {
             <Warehouse className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <h4 className="font-bold text-gray-800 mb-2">Logistics Info</h4>
             <p className="text-gray-600 text-sm">
-              All our deliveries and purchases are conducted strictly under EXW
-              (Ex Works) or DDP (Delivered Duty Paid) Incoterms, subject to
-              mutual agreement.
+              All deliveries are conducted under EXW (Ex Works) or DDP
+              (Delivered Duty Paid) Incoterms, subject to mutual agreement.
             </p>
           </div>
 
@@ -477,30 +403,29 @@ const SubmissionSuccess = () => {
             <Users className="h-12 w-12 text-purple-500 mx-auto mb-4" />
             <h4 className="font-bold text-gray-800 mb-2">Support Center</h4>
             <p className="text-gray-600 text-sm">
-              Access our comprehensive supplier support resources. Call us for
-              our support and to know how we work. 08-xxxxxxxx
+              Access our comprehensive supplier support resources. Call us at
+              +620864322626 for immediate assistance.
             </p>
           </div>
         </div>
 
-        {/* Image Section */}
-        <div className="mb-12 flex justify-center">
-          <img
-            src="https://shipexpert.com/wp-content/uploads/2020/10/shipping-incoterms-explained-infographic.png"
-            alt="Shipping Incoterms Explained"
-            className="rounded-2xl shadow-lg max-w-full h-auto"
-          />
-        </div>
-
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-12">
-          <Link
-            to="/"
+          <button
+            onClick={goToDashboard}
+            className="inline-flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-2xl hover:from-blue-700 hover:to-purple-700 hover:shadow-lg transition-all duration-300 shadow-md"
+          >
+            <Settings size={24} />
+            Go to Dashboard
+          </button>
+
+          <button
+            onClick={() => navigate("/add-products")}
             className="inline-flex items-center gap-3 px-10 py-4 bg-white text-gray-700 font-bold rounded-2xl border-2 border-gray-200 hover:bg-gray-50 hover:border-gray-300 hover:shadow-lg transition-all duration-300 shadow-md"
           >
-            <Home size={24} />
-            Return to Home
-          </Link>
+            <Package size={24} />
+            Add More Products
+          </button>
         </div>
 
         {/* Footer Information */}

@@ -17,11 +17,9 @@ import {
   Package,
   LogOut,
 } from "lucide-react";
-import axios from "axios";
+import apiClient, { authUtils } from "./authutils";
 
-const API_BASE_URL = "https://supplier-mangement-backend.onrender.com/api";
-
-const ProfilePage = ({ supplierData, updateSupplierData, user }) => {
+const ProfilePage = ({ supplierData, updateSupplierData, user, onLogout }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
@@ -44,6 +42,24 @@ const ProfilePage = ({ supplierData, updateSupplierData, user }) => {
     },
     profilePicture: "",
   });
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const token = authUtils.getToken();
+    if (!token) {
+      console.log("No token found, redirecting to login");
+      navigate("/login");
+      return;
+    }
+
+    // Verify token is valid
+    authUtils.verifyToken().then((result) => {
+      if (!result.success) {
+        console.log("Token verification failed, redirecting to login");
+        navigate("/login");
+      }
+    });
+  }, [navigate]);
 
   // Redirect if no products selected
   useEffect(() => {
@@ -75,9 +91,12 @@ const ProfilePage = ({ supplierData, updateSupplierData, user }) => {
     }
   }, [user]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    navigate("/login");
+  const handleLogout = async () => {
+    if (onLogout) {
+      await onLogout();
+    } else {
+      await authUtils.logout(navigate);
+    }
   };
 
   const handleChange = (e) => {
@@ -170,7 +189,17 @@ const ProfilePage = ({ supplierData, updateSupplierData, user }) => {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem("authToken");
+      console.log("Starting form submission...");
+
+      // Verify token before making request
+      const token = authUtils.getToken();
+      if (!token) {
+        setErrors({ submit: "Authentication required. Please login again." });
+        setTimeout(() => navigate("/login"), 2000);
+        return;
+      }
+
+      console.log("Token found, proceeding with submission");
 
       // Step 1: Create supplier with profile info
       const formDataObj = new FormData();
@@ -192,24 +221,39 @@ const ProfilePage = ({ supplierData, updateSupplierData, user }) => {
         }
       });
 
-      // Create supplier
-      const createResponse = await axios.post(
-        `${API_BASE_URL}/suppliers`,
-        formDataObj,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      console.log("Creating supplier with profile data...");
+
+      // Create supplier using apiClient (which automatically includes auth header)
+      const createResponse = await apiClient.post("/suppliers", formDataObj, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      console.log("Supplier creation response:", createResponse.data);
 
       const supplierId = createResponse.data.supplier._id;
       console.log("Supplier created with ID:", supplierId);
 
-      // Step 2: Update with products using PATCH
-      await axios.patch(
-        `${API_BASE_URL}/suppliers/${supplierId}/business`,
+      // IMPORTANT: Wait a moment to ensure the database is updated
+      // The user's supplierId should now be set by the backend
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Step 2: Verify token again to get updated user info
+      console.log("Verifying token to get updated user info...");
+      const verifyResponse = await authUtils.verifyToken();
+
+      if (!verifyResponse.success) {
+        throw new Error("Token verification failed after supplier creation");
+      }
+
+      console.log("Updated user info:", verifyResponse.user);
+
+      // Step 3: Update with products using PATCH
+      console.log("Adding products to supplier...");
+
+      const businessResponse = await apiClient.patch(
+        `/suppliers/${supplierId}/business`,
         {
           products: supplierData.products || [],
           businessType: [],
@@ -220,25 +264,29 @@ const ProfilePage = ({ supplierData, updateSupplierData, user }) => {
           paymentTerms: [],
           preferredCurrency: "IDR",
           documents: [],
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
         }
       );
 
+      console.log("Business data update response:", businessResponse.data);
       console.log("Products added successfully");
 
       // Navigate to success page
       navigate("/success");
     } catch (error) {
       console.error("Error submitting form:", error);
+      console.error("Error response:", error.response?.data);
 
       let errorMessage =
         "There was an error submitting the form. Please try again.";
-      if (error.response?.data?.message) {
+
+      if (error.response?.status === 401) {
+        errorMessage = "Session expired. Please login again.";
+        setTimeout(() => navigate("/login"), 2000);
+      } else if (error.response?.status === 403) {
+        errorMessage =
+          "Access denied. There was an issue with your account permissions.";
+        console.error("403 Error details:", error.response?.data);
+      } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
 

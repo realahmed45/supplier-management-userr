@@ -22,10 +22,11 @@ import {
   Warehouse,
   Truck,
   DollarSign,
+  Edit,
+  Star,
+  ShoppingCart,
 } from "lucide-react";
-import axios from "axios";
-
-const API_BASE_URL = "https://supplier-mangement-backend.onrender.com/api";
+import apiClient, { authUtils } from "./authutils";
 
 const Dashboard = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState("profile");
@@ -35,6 +36,12 @@ const Dashboard = ({ user, onLogout }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Product editing states
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingProductIndex, setEditingProductIndex] = useState(-1);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteProductIndex, setDeleteProductIndex] = useState(-1);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -55,19 +62,33 @@ const Dashboard = ({ user, onLogout }) => {
 
   const navigate = useNavigate();
 
+  // Check authentication on component mount
   useEffect(() => {
-    fetchSupplierData();
-  }, []);
+    const token = authUtils.getToken();
+    if (!token) {
+      console.log("No token found, redirecting to login");
+      navigate("/login");
+      return;
+    }
+
+    // Verify token is valid
+    authUtils.verifyToken().then((result) => {
+      if (!result.success) {
+        console.log("Token verification failed, redirecting to login");
+        navigate("/login");
+      } else {
+        // Token is valid, fetch supplier data
+        fetchSupplierData();
+      }
+    });
+  }, [navigate]);
 
   const fetchSupplierData = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get(
-        `${API_BASE_URL}/suppliers/my-supplier`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      console.log("Fetching supplier data...");
+      const response = await apiClient.get("/suppliers/my-supplier");
+
+      console.log("Supplier data response:", response.data);
 
       if (response.data.success) {
         setSupplierData(response.data.supplier);
@@ -101,10 +122,17 @@ const Dashboard = ({ user, onLogout }) => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    onLogout();
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await authUtils.logout(navigate);
+      if (onLogout) {
+        onLogout();
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Even if logout fails, redirect
+      navigate("/login");
+    }
   };
 
   const handleInputChange = (e) => {
@@ -133,11 +161,13 @@ const Dashboard = ({ user, onLogout }) => {
     setSuccess("");
 
     try {
-      const token = localStorage.getItem("authToken");
-      console.log("Token from localStorage:", token ? "Present" : "Missing");
+      console.log("Saving profile...");
 
+      // Verify token before making request
+      const token = authUtils.getToken();
       if (!token) {
         setError("No authentication token found. Please login again.");
+        setTimeout(() => navigate("/login"), 2000);
         return;
       }
 
@@ -151,19 +181,19 @@ const Dashboard = ({ user, onLogout }) => {
         }
       });
 
-      console.log("Making request to:", `${API_BASE_URL}/suppliers/profile`);
-      console.log("With token:", token.substring(0, 10) + "...");
+      console.log("Making profile update request...");
 
-      const response = await axios.patch(
-        `${API_BASE_URL}/suppliers/profile`,
+      const response = await apiClient.patch(
+        "/suppliers/profile",
         formDataObj,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "multipart/form-data",
           },
         }
       );
+
+      console.log("Profile update response:", response.data);
 
       if (response.data.success) {
         setSuccess("Profile updated successfully!");
@@ -176,7 +206,6 @@ const Dashboard = ({ user, onLogout }) => {
 
       if (error.response?.status === 401) {
         setError("Session expired. Please login again.");
-        // Optionally redirect to login
         setTimeout(() => {
           handleLogout();
         }, 2000);
@@ -188,8 +217,148 @@ const Dashboard = ({ user, onLogout }) => {
     }
   };
 
+  // Product management functions
+  const handleEditProduct = (product, index) => {
+    setEditingProduct({ ...product });
+    setEditingProductIndex(index);
+  };
+
+  const handleCancelEditProduct = () => {
+    setEditingProduct(null);
+    setEditingProductIndex(-1);
+  };
+
+  const handleProductInputChange = (field, value) => {
+    setEditingProduct((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSaveProduct = async () => {
+    if (!editingProduct) return;
+
+    // Validate required fields
+    if (
+      !editingProduct.brandName ||
+      !editingProduct.minOrderQuantity ||
+      !editingProduct.price
+    ) {
+      setError("Please fill all required fields for the product");
+      return;
+    }
+
+    setIsSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      console.log("Updating product...");
+
+      // Update the products array
+      const updatedProducts = [...supplierData.products];
+      updatedProducts[editingProductIndex] = {
+        ...editingProduct,
+        minOrderQuantity: Number(editingProduct.minOrderQuantity),
+        price: Number(editingProduct.price),
+      };
+
+      const response = await apiClient.patch(
+        `/suppliers/${user.supplierId}/business`,
+        {
+          products: updatedProducts,
+          businessType: supplierData.businessType || [],
+          yearsInBusiness: supplierData.yearsInBusiness || 0,
+          warehouses: supplierData.warehouses || [],
+          shippingMethods: supplierData.shippingMethods || [],
+          deliveryAreas: supplierData.deliveryAreas || [],
+          paymentTerms: supplierData.paymentTerms || [],
+          preferredCurrency: supplierData.preferredCurrency || "IDR",
+          documents: supplierData.documents || [],
+        }
+      );
+
+      if (response.data.success) {
+        setSupplierData(response.data.supplier);
+        setSuccess("Product updated successfully!");
+        setEditingProduct(null);
+        setEditingProductIndex(-1);
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch (error) {
+      console.error("Error updating product:", error);
+      if (error.response?.status === 401) {
+        setError("Session expired. Please login again.");
+        setTimeout(() => handleLogout(), 2000);
+      } else {
+        setError(error.response?.data?.message || "Failed to update product");
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteProduct = async (index) => {
+    setDeleteProductIndex(index);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (deleteProductIndex === -1) return;
+
+    setIsSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      console.log("Deleting product...");
+
+      // Remove the product from the array
+      const updatedProducts = [...supplierData.products];
+      updatedProducts.splice(deleteProductIndex, 1);
+
+      const response = await apiClient.patch(
+        `/suppliers/${user.supplierId}/business`,
+        {
+          products: updatedProducts,
+          businessType: supplierData.businessType || [],
+          yearsInBusiness: supplierData.yearsInBusiness || 0,
+          warehouses: supplierData.warehouses || [],
+          shippingMethods: supplierData.shippingMethods || [],
+          deliveryAreas: supplierData.deliveryAreas || [],
+          paymentTerms: supplierData.paymentTerms || [],
+          preferredCurrency: supplierData.preferredCurrency || "IDR",
+          documents: supplierData.documents || [],
+        }
+      );
+
+      if (response.data.success) {
+        setSupplierData(response.data.supplier);
+        setSuccess("Product deleted successfully!");
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      if (error.response?.status === 401) {
+        setError("Session expired. Please login again.");
+        setTimeout(() => handleLogout(), 2000);
+      } else {
+        setError(error.response?.data?.message || "Failed to delete product");
+      }
+    } finally {
+      setIsSaving(false);
+      setShowDeleteConfirm(false);
+      setDeleteProductIndex(-1);
+    }
+  };
+
+  const cancelDeleteProduct = () => {
+    setShowDeleteConfirm(false);
+    setDeleteProductIndex(-1);
+  };
+
   const navigateToProducts = () => {
-    navigate("/");
+    navigate("/add-products");
   };
 
   const StatusBadge = ({ status }) => {
@@ -231,7 +400,7 @@ const Dashboard = ({ user, onLogout }) => {
               <Building2 className="h-8 w-8 text-purple-600" />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">
-                  Supplier Portal
+                  Supplier Portal Dashboard
                 </h1>
                 <p className="text-sm text-gray-500">
                   Welcome back, {formData.contactPerson || user?.phone}
@@ -254,6 +423,57 @@ const Dashboard = ({ user, onLogout }) => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center gap-3">
+              <Package className="h-8 w-8 text-blue-500" />
+              <div>
+                <p className="text-sm text-gray-600">Products</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {supplierData?.products?.length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center gap-3">
+              <FileText className="h-8 w-8 text-green-500" />
+              <div>
+                <p className="text-sm text-gray-600">Documents</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {supplierData?.documents?.length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center gap-3">
+              <Star className="h-8 w-8 text-yellow-500" />
+              <div>
+                <p className="text-sm text-gray-600">Status</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {supplierData?.status || "Pending"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center gap-3">
+              <Building2 className="h-8 w-8 text-purple-500" />
+              <div>
+                <p className="text-sm text-gray-600">Profile</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {user?.profileCompleted ? "Complete" : "Incomplete"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
@@ -280,7 +500,7 @@ const Dashboard = ({ user, onLogout }) => {
                   }`}
                 >
                   <Package size={18} />
-                  Products & Business
+                  Products Management
                   {supplierData?.products?.length > 0 && (
                     <span className="ml-auto bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
                       {supplierData.products.length}
@@ -560,10 +780,10 @@ const Dashboard = ({ user, onLogout }) => {
                   <div className="flex justify-between items-start mb-6">
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900">
-                        Products & Business Information
+                        Products Management
                       </h2>
                       <p className="text-gray-600 mt-1">
-                        Manage your product catalog and business details
+                        View, edit, and manage your product catalog
                       </p>
                     </div>
 
@@ -577,61 +797,240 @@ const Dashboard = ({ user, onLogout }) => {
                   </div>
 
                   {supplierData?.products?.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b-2 border-gray-200">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                              Product
-                            </th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                              Brand
-                            </th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                              Size
-                            </th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                              Price
-                            </th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                              Min Qty
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {supplierData.products.map((product, index) => (
-                            <tr
-                              key={index}
-                              className="border-b border-gray-100 hover:bg-gray-50"
-                            >
-                              <td className="py-3 px-4">
-                                <div>
-                                  <div className="font-medium text-gray-800">
-                                    {product.name}
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {product.category} • {product.subcategory}
-                                  </div>
+                    <div className="space-y-4">
+                      {supplierData.products.map((product, index) => (
+                        <div
+                          key={index}
+                          className="border border-gray-200 rounded-xl p-6"
+                        >
+                          {editingProductIndex === index ? (
+                            /* Edit Mode */
+                            <div className="space-y-4">
+                              <div className="flex justify-between items-start mb-4">
+                                <h3 className="text-lg font-bold text-gray-800">
+                                  Edit Product: {product.name}
+                                </h3>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={handleCancelEditProduct}
+                                    className="flex items-center gap-1 px-3 py-1 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                                  >
+                                    <X size={14} />
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={handleSaveProduct}
+                                    disabled={isSaving}
+                                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 text-sm"
+                                  >
+                                    {isSaving ? (
+                                      <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></div>
+                                    ) : (
+                                      <Save size={14} />
+                                    )}
+                                    Save
+                                  </button>
                                 </div>
-                              </td>
-                              <td className="py-3 px-4 text-gray-600">
-                                {product.brandName}
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
-                                  {product.selectedSize}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 font-semibold text-green-600">
-                                {product.price} {product.unit}
-                              </td>
-                              <td className="py-3 px-4 text-gray-600">
-                                {product.minOrderQuantity}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Brand Name *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editingProduct?.brandName || ""}
+                                    onChange={(e) =>
+                                      handleProductInputChange(
+                                        "brandName",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    placeholder="Enter brand name"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Size/Package
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editingProduct?.selectedSize || ""}
+                                    onChange={(e) =>
+                                      handleProductInputChange(
+                                        "selectedSize",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    placeholder="e.g., 25kg"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Price (IDR) *
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={editingProduct?.price || ""}
+                                    onChange={(e) =>
+                                      handleProductInputChange(
+                                        "price",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    placeholder="Enter price"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Min Order Qty *
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={
+                                      editingProduct?.minOrderQuantity || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleProductInputChange(
+                                        "minOrderQuantity",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    placeholder="e.g., 100"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Delivery time (days)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editingProduct?.leadTime || ""}
+                                    onChange={(e) =>
+                                      handleProductInputChange(
+                                        "leadTime",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    placeholder="e.g., 2-4 days"
+                                  />
+                                </div>
+
+                                <div className="md:col-span-2 lg:col-span-3">
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Additional notes
+                                  </label>
+                                  <textarea
+                                    value={editingProduct?.description || ""}
+                                    onChange={(e) =>
+                                      handleProductInputChange(
+                                        "",
+                                        e.target.value
+                                      )
+                                    }
+                                    rows="2"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    placeholder="Product description (optional)"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            /* View Mode */
+                            <div>
+                              <div className="flex justify-between items-start mb-4">
+                                <div>
+                                  <h3 className="text-lg font-bold text-gray-800">
+                                    {product.name}
+                                  </h3>
+                                  <p className="text-sm text-gray-500">
+                                    {product.category} • {product.subcategory}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() =>
+                                      handleEditProduct(product, index)
+                                    }
+                                    className="flex items-center gap-1 px-3 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-sm"
+                                  >
+                                    <Edit size={14} />
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(index)}
+                                    disabled={isSaving}
+                                    className="flex items-center gap-1 px-3 py-1 text-red-600 hover:text-red-800 border border-red-300 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 text-sm"
+                                  >
+                                    <Trash2 size={14} />
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm">
+                                <div>
+                                  <p className="text-gray-500">Brand</p>
+                                  <p className="font-medium text-gray-800">
+                                    {product.brandName}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Size</p>
+                                  <p className="font-medium text-gray-800">
+                                    {product.selectedSize}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Price</p>
+                                  <p className="font-bold text-green-600">
+                                    IDR {product.price}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Min Qty</p>
+                                  <p className="font-medium text-gray-800">
+                                    {product.minOrderQuantity}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Lead Time</p>
+                                  <p className="font-medium text-gray-800">
+                                    {product.leadTime || "N/A"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Unit</p>
+                                  <p className="font-medium text-gray-800">
+                                    {product.unit || "piece"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {product.description && (
+                                <div className="mt-3 pt-3 border-t border-gray-100">
+                                  <p className="text-gray-500 text-sm">
+                                    Description
+                                  </p>
+                                  <p className="text-gray-700 text-sm">
+                                    {product.description}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="text-center py-12">
@@ -754,6 +1153,66 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Delete Product
+                </h3>
+                <p className="text-gray-600">
+                  Are you sure you want to delete this product?
+                </p>
+              </div>
+            </div>
+
+            {deleteProductIndex >= 0 &&
+              supplierData?.products?.[deleteProductIndex] && (
+                <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                  <p className="font-medium text-gray-800">
+                    {supplierData.products[deleteProductIndex].name}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {supplierData.products[deleteProductIndex].brandName} •{" "}
+                    {supplierData.products[deleteProductIndex].selectedSize}
+                  </p>
+                </div>
+              )}
+
+            <p className="text-sm text-gray-600 mb-6">
+              This action cannot be undone. The product will be permanently
+              removed from your catalog.
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelDeleteProduct}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteProduct}
+                disabled={isSaving}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                ) : (
+                  <Trash2 size={16} />
+                )}
+                {isSaving ? "Deleting..." : "Delete Product"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
